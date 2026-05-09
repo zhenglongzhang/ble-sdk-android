@@ -199,10 +199,9 @@ String requestId = bleClient.startRecord(new BleWriteListener() {
 
 1. 打开蓝牙权限
 2. 点击 `Start Scan`
-3. 在列表里选择一个设备，界面会自动把 MAC 地址填入输入框
-4. 点击 `Connect`
-5. 连接成功后直接点击 5 个控制按钮之一
-6. 在底部 `Runtime Log` 查看发送结果和设备回包
+3. 在列表里点击一个设备，Demo 会立即发起连接
+4. 连接成功后直接点击 5 个控制按钮之一
+5. 在底部 `Runtime Log` 查看发送结果和设备回包
 
 ## JitPack 发布
 

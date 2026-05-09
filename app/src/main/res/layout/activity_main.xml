@@ -79,37 +79,17 @@
             android:orientation="horizontal">
 
             <Button
-                android:id="@+id/btnConnect"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/connect_device" />
-
-            <Button
                 android:id="@+id/btnDisconnect"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_weight="1"
                 android:text="@string/disconnect_device" />
         </LinearLayout>
-
-        <EditText
-            android:id="@+id/etDeviceAddress"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bg_input"
-            android:hint="@string/device_address_hint"
-            android:padding="12dp"
-            android:textColor="@color/text_primary"
-            android:textColorHint="@color/text_hint" />
 
         <TextView
             android:id="@+id/tvUuidInfo"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="16dp"
             android:background="@drawable/bg_panel"
             android:padding="12dp"
             android:textColor="@color/text_secondary"

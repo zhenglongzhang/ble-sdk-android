@@ -59,8 +59,11 @@ public class MainActivity extends AppCompatActivity implements
         bleClient.setBleStateListener(this);
 
         bleDeviceAdapter = new BleDeviceAdapter(device -> {
-            binding.etDeviceAddress.setText(device.getAddress());
-            log("Selected device: " + device.getDisplayName() + " / " + device.getAddress());
+            ensurePermissions(() -> {
+                log("Selected device: " + device.getDisplayName() + " / " + device.getAddress());
+                log("Connecting to " + device.getAddress());
+                bleClient.connect(device, this);
+            });
         });
         binding.rvDevices.setLayoutManager(new LinearLayoutManager(this));
         binding.rvDevices.setAdapter(bleDeviceAdapter);
@@ -72,7 +75,6 @@ public class MainActivity extends AppCompatActivity implements
     }
 
     private void initScreen() {
-        binding.etDeviceAddress.setText("");
         binding.tvUuidInfo.setText(
                 "Service UUID: " + BleClient.FIXED_SERVICE_UUID + "\n"
                         + "Write UUID: " + BleClient.FIXED_WRITE_CHARACTERISTIC_UUID + "\n"
@@ -103,11 +105,6 @@ public class MainActivity extends AppCompatActivity implements
             bleClient.stopScan();
             log("Stop scan requested.");
         });
-        binding.btnConnect.setOnClickListener(view -> ensurePermissions(() -> {
-            String address = binding.etDeviceAddress.getText().toString().trim();
-            log("Connecting to " + address);
-            bleClient.connect(address, this);
-        }));
         binding.btnDisconnect.setOnClickListener(view -> {
             bleClient.disconnect();
             log("Disconnect requested.");
