@@ -67,7 +67,7 @@ dependencyResolutionManagement {
 
 ```gradle
 dependencies {
-    implementation "com.github.zhenglongzhang:ble-sdk-android:1.0.0"
+    implementation "com.github.zhenglongzhang:ble-sdk-android:1.0.1"
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
 }
 ```
