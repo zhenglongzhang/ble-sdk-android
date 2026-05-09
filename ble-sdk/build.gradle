@@ -37,7 +37,7 @@ afterEvaluate {
         publications {
             release(MavenPublication) {
                 from components.release
-                groupId = project.findProperty("GROUP") ?: "com.github.your_github_id"
+                groupId = project.findProperty("GROUP") ?: "com.github.zhenglongzhang"
                 artifactId = project.findProperty("POM_ARTIFACT_ID") ?: "ble-sdk-android"
                 version = project.findProperty("VERSION_NAME") ?: "1.0.0"
 

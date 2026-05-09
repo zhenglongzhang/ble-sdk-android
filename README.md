@@ -213,4 +213,4 @@ String requestId = bleClient.startRecord(new BleWriteListener() {
 
 - ./gradlew :ble-sdk:publishReleasePublicationToMavenLocal
 - Demo APK 输出：[`app-debug.apk`](/ble-sdk-android/app/build/outputs/apk/debug/app-debug.apk)
-- 本地 Maven 产物：`~/.m2/repository/com/github/your_github_id/ble-sdk-android/1.0.0/`
+- 本地 Maven 产物：`~/.m2/repository/com/github/zhenglongzhang/ble-sdk-android/1.0.0/`
