@@ -8,6 +8,11 @@ import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.le.BluetoothLeScanner;
+import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanFilter;
+import android.bluetooth.le.ScanResult;
+import android.bluetooth.le.ScanSettings;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -38,11 +43,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import no.nordicsemi.android.ble.BleManager;
 import no.nordicsemi.android.ble.observer.ConnectionObserver;
-import no.nordicsemi.android.support.v18.scanner.BluetoothLeScannerCompat;
-import no.nordicsemi.android.support.v18.scanner.ScanCallback;
-import no.nordicsemi.android.support.v18.scanner.ScanFilter;
-import no.nordicsemi.android.support.v18.scanner.ScanResult;
-import no.nordicsemi.android.support.v18.scanner.ScanSettings;
 
 public class BleClient {
     private static final long DEFAULT_SCAN_DURATION_MS = 10_000L;
@@ -78,6 +78,7 @@ public class BleClient {
     private BleStateListener bleStateListener;
     private BleScanListener bleScanListener;
     private BleConnectionListener bleConnectionListener;
+    private BluetoothLeScanner currentScanner;
     private ScanCallback currentScanCallback;
     private boolean bluetoothStateRegistered;
     private boolean scanning;
@@ -209,6 +210,12 @@ public class BleClient {
 
         stopScanInternal(false);
         scannedDevices.clear();
+        BluetoothLeScanner scanner = bluetoothAdapter.getBluetoothLeScanner();
+        if (scanner == null) {
+            notifyScanFailed("Bluetooth LE scanner is unavailable.");
+            return;
+        }
+        currentScanner = scanner;
         currentScanCallback = createScanCallback();
         ScanSettings settings = new ScanSettings.Builder()
                 .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
@@ -216,7 +223,7 @@ public class BleClient {
                 .build();
 
         try {
-            BluetoothLeScannerCompat.getScanner().startScan(new ArrayList<ScanFilter>(), settings, currentScanCallback);
+            currentScanner.startScan(new ArrayList<ScanFilter>(), settings, currentScanCallback);
             scanning = true;
             if (bleScanListener != null) {
                 dispatch(new Runnable() {
@@ -497,9 +504,16 @@ public class BleClient {
         scanning = false;
         if (currentScanCallback != null) {
             try {
-                BluetoothLeScannerCompat.getScanner().stopScan(currentScanCallback);
+                BluetoothLeScanner scanner = currentScanner;
+                if (scanner == null && bluetoothAdapter != null && bluetoothAdapter.isEnabled()) {
+                    scanner = bluetoothAdapter.getBluetoothLeScanner();
+                }
+                if (scanner != null) {
+                    scanner.stopScan(currentScanCallback);
+                }
             } catch (Exception ignored) {
             }
+            currentScanner = null;
             currentScanCallback = null;
         }
         if (notifyStopped && wasScanning && bleScanListener != null) {

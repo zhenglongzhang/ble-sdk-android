@@ -52,6 +52,5 @@ afterEvaluate {
 
 dependencies {
     implementation 'no.nordicsemi.android:ble:2.11.0'
-    implementation 'no.nordicsemi.android.support.v18:scanner:1.6.0'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
 }

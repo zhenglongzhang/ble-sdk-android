@@ -26,7 +26,7 @@
 协议统一格式：
 
 ```text
-V1|RECORD|ACTION|REQUEST_ID|TIMESTAMP\n
+V1|RECORD|ACTION|TIMESTAMP
 ```
 
 当前封装的 5 个动作如下：
@@ -67,14 +67,14 @@ dependencyResolutionManagement {
 
 ```gradle
 dependencies {
-    implementation "com.github.zhenglongzhang:ble-sdk-android:1.0.1"
+    implementation "com.github.zhenglongzhang:ble-sdk-android:1.0.2"
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
 }
 ```
 
 ### 3. 开启 desugaring
 
-因为底层使用了 Nordic 的 `Android-Scanner-Compat-Library`，接入方也需要开启：
+当前工程保留了 desugaring 配置，用于兼容低版本 Android 设备上的 Java 标准库调用：
 
 ```gradle
 android {
@@ -168,6 +168,8 @@ String requestId = bleClient.startRecord(new BleWriteListener() {
     }
 });
 ```
+
+`requestId` 用于业务侧日志关联；当前 SDK 实际下发给设备的控制报文格式为 `V1|RECORD|ACTION|TIMESTAMP`。
 
 ## 关键 API
 

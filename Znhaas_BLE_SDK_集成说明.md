@@ -4,7 +4,7 @@
 
 本文档仅供龙湖内部使用，为龙湖 APP 开发提供 Android 安全帽 BLE SDK 接口说明，禁止外传。
 
-本文档对应的 SDK 为 `Znhaas BLE SDK`，当前版本号为 `1.0.1`，最低支持 Android `API 22`。
+本文档对应的 SDK 为 `Znhaas BLE SDK`，当前版本号为 `1.0.2`，最低支持 Android `API 22`。
 
 ## 2. 业务说明
 
@@ -46,14 +46,14 @@ dependencyResolutionManagement {
 
 ```gradle
 dependencies {
-    implementation "com.github.zhenglongzhang:ble-sdk-android:1.0.1"
+    implementation "com.github.zhenglongzhang:ble-sdk-android:1.0.2"
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
 }
 ```
 
 ### 3.2 编译选项
 
-由于 SDK 内部使用 Nordic BLE 相关库，接入方需要开启 desugaring：
+当前工程保留了 desugaring 配置，用于兼容低版本 Android 设备上的 Java 标准库调用：
 
 ```gradle
 android {
@@ -241,7 +241,7 @@ bleClient.enableNotification(
 统一消息格式：
 
 ```text
-V1|RECORD|ACTION|REQUEST_ID|TIMESTAMP\n
+V1|RECORD|ACTION|TIMESTAMP
 ```
 
 5 个动作如下：
@@ -265,6 +265,11 @@ String requestId = bleClient.startRecord(new BleWriteListener() {
     }
 });
 ```
+
+说明：
+
+- `requestId` 用于业务侧调用日志关联
+- 当前 SDK 实际发送给设备的控制报文不包含扩展字段，也不带 `requestId`
 
 动作与协议值映射如下：
 
@@ -337,6 +342,6 @@ SDK Demo 已集成在项目 `app` 模块中，操作流程如下：
 ## 13. 版本信息
 
 - SDK 名称：`Znhaas BLE SDK`
-- 当前版本：`1.0.1`
-- Maven 坐标：`com.github.zhenglongzhang:ble-sdk-android:1.0.1`
+- 当前版本：`1.0.2`
+- Maven 坐标：`com.github.zhenglongzhang:ble-sdk-android:1.0.2`
 - 最低系统版本：`Android API 22`
