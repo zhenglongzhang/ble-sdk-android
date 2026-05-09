@@ -1,0 +1,22 @@
+[
+    {
+        "merged": "com.znhaas.demo.app-merged_res-29:/layout_activity_main.xml.flat",
+        "source": "com.znhaas.demo.app-main-31:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.znhaas.demo.app-merged_res-29:/drawable_bg_input.xml.flat",
+        "source": "com.znhaas.demo.app-main-31:/drawable/bg_input.xml"
+    },
+    {
+        "merged": "com.znhaas.demo.app-merged_res-29:/drawable_bg_panel.xml.flat",
+        "source": "com.znhaas.demo.app-main-31:/drawable/bg_panel.xml"
+    },
+    {
+        "merged": "com.znhaas.demo.app-merged_res-29:/drawable_bg_device_item.xml.flat",
+        "source": "com.znhaas.demo.app-main-31:/drawable/bg_device_item.xml"
+    },
+    {
+        "merged": "com.znhaas.demo.app-merged_res-29:/layout_item_ble_device.xml.flat",
+        "source": "com.znhaas.demo.app-main-31:/layout/item_ble_device.xml"
+    }
+]

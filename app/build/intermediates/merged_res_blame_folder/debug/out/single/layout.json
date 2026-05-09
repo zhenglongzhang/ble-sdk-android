@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "com.znhaas.demo.app-mergeDebugResources-28:/layout/item_ble_device.xml",
+        "source": "com.znhaas.demo.app-main-31:/layout/item_ble_device.xml"
+    },
+    {
+        "merged": "com.znhaas.demo.app-mergeDebugResources-28:/layout/activity_main.xml",
+        "source": "com.znhaas.demo.app-main-31:/layout/activity_main.xml"
+    }
+]

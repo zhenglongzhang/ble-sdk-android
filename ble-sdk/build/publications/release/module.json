@@ -1,0 +1,94 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.github.your_github_id",
+    "module": "ble-sdk-android",
+    "version": "1.0.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.2"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseVariantReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "ble-sdk-android-1.0.0.aar",
+          "url": "ble-sdk-android-1.0.0.aar",
+          "size": 31962,
+          "sha512": "4345788c8d009fd676dc81377465b9af92c3ecc4a6b03237429f1e630e09b6a6d59a7430096d7b9d4539b01897364226311d74dc56fdf3d4df33efdb06c5ad1a",
+          "sha256": "dd6faf9de109768e2c440982d61bab52f045bb786ec306e2e8684cde96ad8a71",
+          "sha1": "bfdd6d1f61d04d612f1ebb1179d7b9bc46632a35",
+          "md5": "be9b0f404071b677ae36d28f19a84037"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "no.nordicsemi.android",
+          "module": "ble",
+          "version": {
+            "requires": "2.11.0"
+          }
+        },
+        {
+          "group": "no.nordicsemi.android.support.v18",
+          "module": "scanner",
+          "version": {
+            "requires": "1.6.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "ble-sdk-android-1.0.0.aar",
+          "url": "ble-sdk-android-1.0.0.aar",
+          "size": 31962,
+          "sha512": "4345788c8d009fd676dc81377465b9af92c3ecc4a6b03237429f1e630e09b6a6d59a7430096d7b9d4539b01897364226311d74dc56fdf3d4df33efdb06c5ad1a",
+          "sha256": "dd6faf9de109768e2c440982d61bab52f045bb786ec306e2e8684cde96ad8a71",
+          "sha1": "bfdd6d1f61d04d612f1ebb1179d7b9bc46632a35",
+          "md5": "be9b0f404071b677ae36d28f19a84037"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseSourcePublication",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "ble-sdk-android-1.0.0-sources.jar",
+          "url": "ble-sdk-android-1.0.0-sources.jar",
+          "size": 10978,
+          "sha512": "926f179f272a05716b4e1c90500e319e49f7f76c337cca7bc27acdb9bf251d20a9290531137ff1e3cb2b0e18dbac9236f022ec99f6badb84430aaca90c6cb95e",
+          "sha256": "625fbb01ade4ccce1a30cf424746dd1b862f6bda61d37b8c67302a46e8aae1c9",
+          "sha1": "c49c1352b54dac7dbed433e920456ca037e4eae2",
+          "md5": "3dbe12965968493c16744c10ea9025e3"
+        }
+      ]
+    }
+  ]
+}

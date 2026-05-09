@@ -1,0 +1,13 @@
+plugins {
+    id 'com.android.application' version '8.2.2' apply false
+    id 'com.android.library' version '8.2.2' apply false
+}
+
+allprojects {
+    group = findProperty("GROUP") ?: "com.github.your_github_id"
+    version = findProperty("VERSION_NAME") ?: "1.0.0"
+}
+
+tasks.register('clean', Delete) {
+    delete rootProject.layout.buildDirectory
+}

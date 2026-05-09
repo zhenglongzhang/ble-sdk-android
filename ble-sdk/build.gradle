@@ -1,0 +1,57 @@
+plugins {
+    id 'com.android.library'
+    id 'maven-publish'
+}
+
+android {
+    namespace 'com.znhaas.sdk'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 22
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+        }
+    }
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                from components.release
+                groupId = project.findProperty("GROUP") ?: "com.github.your_github_id"
+                artifactId = project.findProperty("POM_ARTIFACT_ID") ?: "ble-sdk-android"
+                version = project.findProperty("VERSION_NAME") ?: "1.0.0"
+
+                pom {
+                    name = project.findProperty("POM_NAME") ?: "Znhaas BLE SDK"
+                    description = project.findProperty("POM_DESCRIPTION") ?: "Android BLE SDK with scan, enable, connect, notify and demo app."
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation 'no.nordicsemi.android:ble:2.11.0'
+    implementation 'no.nordicsemi.android.support.v18:scanner:1.6.0'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+}

@@ -1,0 +1,52 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:2:1-15:12
+INJECTED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:2:1-15:12
+	package
+		INJECTED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:2:11-69
+uses-feature#android.hardware.bluetooth_le
+ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:4:5-6:36
+	android:required
+		ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:6:9-33
+	android:name
+		ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:5:9-53
+uses-permission#android.permission.BLUETOOTH
+ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:8:5-95
+	android:maxSdkVersion
+		ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:8:66-92
+	android:name
+		ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:8:22-65
+uses-permission#android.permission.BLUETOOTH_ADMIN
+ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:9:5-101
+	android:maxSdkVersion
+		ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:9:72-98
+	android:name
+		ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:9:22-71
+uses-permission#android.permission.ACCESS_COARSE_LOCATION
+ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:10:5-108
+	android:maxSdkVersion
+		ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:10:79-105
+	android:name
+		ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:10:22-78
+uses-permission#android.permission.ACCESS_FINE_LOCATION
+ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:11:5-79
+	android:name
+		ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:11:22-76
+uses-permission#android.permission.BLUETOOTH_SCAN
+ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:12:5-73
+	android:name
+		ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:12:22-70
+uses-permission#android.permission.BLUETOOTH_CONNECT
+ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:13:5-76
+	android:name
+		ADDED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml:13:22-73
+uses-sdk
+INJECTED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml
+INJECTED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /Users/zhenglongzhang/coding/ble-sdk-android/ble-sdk/src/main/AndroidManifest.xml
