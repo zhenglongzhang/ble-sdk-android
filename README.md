@@ -67,7 +67,7 @@ dependencyResolutionManagement {
 
 ```gradle
 dependencies {
-    implementation "com.github.<你的GitHub用户名>:ble-sdk-android:1.0.0"
+    implementation "com.github.zhenglongzhang:ble-sdk-android:1.0.0"
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
 }
 ```
@@ -204,16 +204,6 @@ String requestId = bleClient.startRecord(new BleWriteListener() {
 
 ## JitPack 发布
 
-发布前建议先把 [`gradle.properties`](/Users/zhenglongzhang/coding/ble-sdk-android/gradle.properties) 里的 `GROUP` 改成你的 GitHub 用户名对应坐标，例如：
-
-```properties
-GROUP=com.github.your_github_id
-VERSION_NAME=1.0.0
-POM_ARTIFACT_ID=ble-sdk-android
-```
-
-然后：
-
 1. 将工程推到 GitHub
 2. 打 tag，例如 `1.0.0`
 3. 到 JitPack 页面触发构建
@@ -221,7 +211,6 @@ POM_ARTIFACT_ID=ble-sdk-android
 
 ## 本地验证
 
-已经完成本地构建验证：
-
-- Demo APK 输出：[`app-debug.apk`](/Users/zhenglongzhang/coding/ble-sdk-android/app/build/outputs/apk/debug/app-debug.apk)
+- ./gradlew :ble-sdk:publishReleasePublicationToMavenLocal
+- Demo APK 输出：[`app-debug.apk`](/ble-sdk-android/app/build/outputs/apk/debug/app-debug.apk)
 - 本地 Maven 产物：`~/.m2/repository/com/github/your_github_id/ble-sdk-android/1.0.0/`
