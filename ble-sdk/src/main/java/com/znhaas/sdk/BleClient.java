@@ -48,8 +48,9 @@ public class BleClient {
     private static final long DEFAULT_SCAN_DURATION_MS = 10_000L;
     public static final String TARGET_DEVICE_NAME_PREFIX = "znhaas";
     public static final String FIXED_SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E";
-    public static final String FIXED_WRITE_CHARACTERISTIC_UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E";
-    public static final String FIXED_NOTIFY_CHARACTERISTIC_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E";
+    public static final String FIXED_WRITE_CHARACTERISTIC_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E";
+    public static final String FIXED_NOTIFY_CHARACTERISTIC_UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E";
+    public static final int REQUESTED_MTU = 517;
 
     public enum RecordAction {
         START_RECORD("1"),
@@ -300,6 +301,19 @@ public class BleClient {
     }
 
     @SuppressLint("MissingPermission")
+    public void enableFixedServiceNotifications(BleNotifyListener listener) {
+        if (deviceBleManager == null || !deviceBleManager.isConnected()) {
+            notifyNotifyError(listener, FIXED_SERVICE_UUID, FIXED_NOTIFY_CHARACTERISTIC_UUID, "No BLE device is connected.");
+            return;
+        }
+        try {
+            deviceBleManager.enableServiceNotifications(BleUuidUtils.fromString(FIXED_SERVICE_UUID), listener);
+        } catch (IllegalArgumentException exception) {
+            notifyNotifyError(listener, FIXED_SERVICE_UUID, FIXED_NOTIFY_CHARACTERISTIC_UUID, exception.getMessage());
+        }
+    }
+
+    @SuppressLint("MissingPermission")
     public void disableNotification(String serviceUuid, String characteristicUuid) {
         if (deviceBleManager == null) {
             return;
@@ -311,6 +325,28 @@ public class BleClient {
             );
         } catch (IllegalArgumentException ignored) {
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    public void read(String serviceUuid, String characteristicUuid, BleNotifyListener listener) {
+        if (deviceBleManager == null || !deviceBleManager.isConnected()) {
+            notifyNotifyError(listener, serviceUuid, characteristicUuid, "No BLE device is connected.");
+            return;
+        }
+        try {
+            deviceBleManager.read(
+                    BleUuidUtils.fromString(serviceUuid),
+                    BleUuidUtils.fromString(characteristicUuid),
+                    listener
+            );
+        } catch (IllegalArgumentException exception) {
+            notifyNotifyError(listener, serviceUuid, characteristicUuid, exception.getMessage());
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    public void readFixedReply(BleNotifyListener listener) {
+        read(FIXED_SERVICE_UUID, FIXED_NOTIFY_CHARACTERISTIC_UUID, listener);
     }
 
     @SuppressLint("MissingPermission")
@@ -371,8 +407,7 @@ public class BleClient {
     }
 
     public String buildRecordCommand(RecordAction action, String requestId, long timestamp) {
-          return "V1|RECORD|" + action.getCode() + "|" + timestamp;
-       // return "V1|RECORD|" + action.getCode() + "|" + requestId + "|" + timestamp;
+        return "V1|RECORD|" + action.getCode() + "|" + requestId + "|" + timestamp;
     }
 
     public void release() {
@@ -679,7 +714,7 @@ public class BleClient {
 
     private String buildRequestId(RecordAction action) {
         String actionName = action.name().toLowerCase(Locale.US);
-        return "req-" + actionName + "-" + System.currentTimeMillis();
+        return "req-" + System.currentTimeMillis();
     }
 
     private interface InternalBleListener {
@@ -751,6 +786,7 @@ public class BleClient {
 
         @Override
         protected void initialize() {
+            requestMtu(REQUESTED_MTU).enqueue();
         }
 
         @Override
@@ -790,11 +826,18 @@ public class BleClient {
                             activeNotifyListeners.put(key, listener);
                             listener.onNotifyEnabled(serviceUuid, characteristicUuid);
                         })
-                        .fail((device, status) -> listener.onError(
-                                serviceUuid,
-                                characteristicUuid,
-                                "Failed to enable notify, status=" + status
-                        ))
+                        .fail((device, status) -> {
+                            if (enableLocalNotification(characteristic)) {
+                                activeNotifyListeners.put(key, listener);
+                                listener.onNotifyEnabled(serviceUuid, characteristicUuid);
+                                return;
+                            }
+                            listener.onError(
+                                    serviceUuid,
+                                    characteristicUuid,
+                                    "Failed to enable notify, status=" + status
+                            );
+                        })
                         .enqueue();
                 return;
             }
@@ -805,16 +848,56 @@ public class BleClient {
                             activeNotifyListeners.put(key, listener);
                             listener.onNotifyEnabled(serviceUuid, characteristicUuid);
                         })
-                        .fail((device, status) -> listener.onError(
-                                serviceUuid,
-                                characteristicUuid,
-                                "Failed to enable indicate, status=" + status
-                        ))
+                        .fail((device, status) -> {
+                            if (enableLocalNotification(characteristic)) {
+                                activeNotifyListeners.put(key, listener);
+                                listener.onNotifyEnabled(serviceUuid, characteristicUuid);
+                                return;
+                            }
+                            listener.onError(
+                                    serviceUuid,
+                                    characteristicUuid,
+                                    "Failed to enable indicate, status=" + status
+                            );
+                        })
                         .enqueue();
                 return;
             }
 
+            if (enableLocalNotification(characteristic)) {
+                activeNotifyListeners.put(key, listener);
+                listener.onNotifyEnabled(serviceUuid, characteristicUuid);
+                return;
+            }
+
             listener.onError(serviceUuid, characteristicUuid, "Characteristic does not support notify or indicate.");
+        }
+
+        void enableServiceNotifications(final UUID serviceUuid, final BleNotifyListener listener) {
+            if (bluetoothGatt == null) {
+                listener.onError(serviceUuid, new UUID(0L, 0L), "No GATT connection is available.");
+                return;
+            }
+            BluetoothGattService service = bluetoothGatt.getService(serviceUuid);
+            if (service == null) {
+                listener.onError(serviceUuid, new UUID(0L, 0L), "Fixed service was not found.");
+                return;
+            }
+            boolean attempted = false;
+            BluetoothGattCharacteristic fixedReply = service.getCharacteristic(BleUuidUtils.fromString(FIXED_NOTIFY_CHARACTERISTIC_UUID));
+            for (BluetoothGattCharacteristic characteristic : service.getCharacteristics()) {
+                if (supportsNotify(characteristic) || supportsIndicate(characteristic)) {
+                    attempted = true;
+                    enableNotification(serviceUuid, characteristic.getUuid(), listener);
+                }
+            }
+            if (fixedReply != null && !supportsNotify(fixedReply) && !supportsIndicate(fixedReply)) {
+                attempted = true;
+                enableNotification(serviceUuid, fixedReply.getUuid(), listener);
+            }
+            if (!attempted) {
+                listener.onError(serviceUuid, BleUuidUtils.fromString(FIXED_NOTIFY_CHARACTERISTIC_UUID), "No reply characteristic can be listened.");
+            }
         }
 
         void disableNotification(final UUID serviceUuid, final UUID characteristicUuid) {
@@ -860,7 +943,44 @@ public class BleClient {
                             }
                         })
                         .enqueue();
+                return;
             }
+
+            if (disableLocalNotification(characteristic)) {
+                BleNotifyListener active = activeNotifyListeners.remove(buildKey(serviceUuid, characteristicUuid));
+                if (active != null) {
+                    active.onNotifyDisabled(serviceUuid, characteristicUuid);
+                }
+            }
+        }
+
+        void read(final UUID serviceUuid, final UUID characteristicUuid, final BleNotifyListener listener) {
+            final BluetoothGattCharacteristic characteristic = findCharacteristic(serviceUuid, characteristicUuid);
+            if (characteristic == null) {
+                listener.onError(serviceUuid, characteristicUuid, "Read characteristic was not found.");
+                return;
+            }
+            if (!supportsRead(characteristic)) {
+                listener.onError(serviceUuid, characteristicUuid, "Characteristic does not support read.");
+                return;
+            }
+
+            readCharacteristic(characteristic)
+                    .with((device, data) -> {
+                        byte[] value = data != null ? data.getValue() : new byte[0];
+                        listener.onCharacteristicChanged(
+                                serviceUuid,
+                                characteristicUuid,
+                                value,
+                                BleHexUtils.toHex(value)
+                        );
+                    })
+                    .fail((device, status) -> listener.onError(
+                            serviceUuid,
+                            characteristicUuid,
+                            "Failed to read characteristic, status=" + status
+                    ))
+                    .enqueue();
         }
 
         void write(final UUID serviceUuid, final UUID characteristicUuid, final byte[] value, final BleWriteListener listener) {
@@ -911,8 +1031,22 @@ public class BleClient {
             return (characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0;
         }
 
+        private boolean supportsRead(BluetoothGattCharacteristic characteristic) {
+            return (characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_READ) != 0;
+        }
+
         private boolean supportsWriteWithoutResponse(BluetoothGattCharacteristic characteristic) {
             return (characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0;
+        }
+
+        @SuppressLint("MissingPermission")
+        private boolean enableLocalNotification(BluetoothGattCharacteristic characteristic) {
+            return bluetoothGatt != null && bluetoothGatt.setCharacteristicNotification(characteristic, true);
+        }
+
+        @SuppressLint("MissingPermission")
+        private boolean disableLocalNotification(BluetoothGattCharacteristic characteristic) {
+            return bluetoothGatt != null && bluetoothGatt.setCharacteristicNotification(characteristic, false);
         }
     }
 }

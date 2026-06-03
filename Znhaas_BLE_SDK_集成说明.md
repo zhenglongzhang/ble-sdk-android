@@ -15,6 +15,7 @@
 - 蓝牙连接
 - 蓝牙监听设备回传数据
 - 安全帽录像控制指令下发
+- H5 通过 WebView JSBridge 操作蓝牙
 
 当前 SDK 已按业务场景做专用化约束：
 
@@ -23,8 +24,11 @@
   - 例如：`znhaas_23070401` 显示为 `23070401`
 - 固定使用 znhaas UART Service
   - Service UUID：`6E400001-B5A3-F393-E0A9-E50E24DCCA9E`
-  - Write UUID：`6E400002-B5A3-F393-E0A9-E50E24DCCA9E`
-  - Notify UUID：`6E400003-B5A3-F393-E0A9-E50E24DCCA9E`
+  - Write UUID：`6E400003-B5A3-F393-E0A9-E50E24DCCA9E`
+  - Reply UUID：`6E400002-B5A3-F393-E0A9-E50E24DCCA9E`
+- 连接设备并完成服务发现后，SDK 会自动请求 MTU `517`
+- 设备业务 ACK 优先使用 Notify/Indicate 监听，ACK 格式以 `V1|ACK|...` 开头
+- 如果 Reply 特征只能 Read，可通过 SDK 读取一次作为诊断兜底；读到的 `RECORD|SUPPORTED` 属于能力说明，不代表本次命令 ACK
 
 ## 3. Android SDK 集成说明
 
@@ -109,6 +113,9 @@ BleClient bleClient = new BleClient(context);
 - `connect(String address, BleConnectionListener listener)`
 - `disconnect()`
 - `enableNotification(String serviceUuid, String characteristicUuid, BleNotifyListener listener)`
+- `enableFixedServiceNotifications(BleNotifyListener listener)`
+- `read(String serviceUuid, String characteristicUuid, BleNotifyListener listener)`
+- `readFixedReply(BleNotifyListener listener)`
 
 ## 5. 蓝牙打开说明
 
@@ -233,6 +240,7 @@ bleClient.enableNotification(
 - 设备回传数据通过 `onCharacteristicChanged(...)` 回调
 - 回调同时提供原始字节数组和十六进制字符串
 - 对于 ASCII 协议，业务层可按 UTF-8 文本进一步解析
+- 若设备 Reply 特征不支持 Notify/Indicate，但支持 Read，可在写入成功后调用 `readFixedReply(...)` 读取诊断值；业务成功与否应以 `V1|ACK|...` 格式的 ACK 为准
 
 ## 9. 录像控制指令说明
 
@@ -241,7 +249,7 @@ bleClient.enableNotification(
 统一消息格式：
 
 ```text
-V1|RECORD|ACTION|TIMESTAMP
+V1|RECORD|ACTION|REQUEST_ID|TIMESTAMP
 ```
 
 5 个动作如下：
@@ -269,7 +277,7 @@ String requestId = bleClient.startRecord(new BleWriteListener() {
 说明：
 
 - `requestId` 用于业务侧调用日志关联
-- 当前 SDK 实际发送给设备的控制报文不包含扩展字段，也不带 `requestId`
+- `requestId` 会拼接进设备控制报文，用于和设备返回的 `V1|ACK|...` 进行链路关联
 
 动作与协议值映射如下：
 
@@ -320,26 +328,124 @@ String requestId = bleClient.startRecord(new BleWriteListener() {
 - `onWriteSuccess(...)`
 - `onError(...)`
 
-## 11. Demo 使用说明
+## 11. H5 JSBridge 接入说明
 
-SDK Demo 已集成在项目 `app` 模块中，操作流程如下：
+### 11.1 原生 WebView 注册
 
-1. 打开蓝牙权限
-2. 点击 `Start Scan`
-3. 在扫描列表中选择目标安全帽设备
-4. 点击 `Connect`
+宿主 App 可直接使用 SDK 提供的 `ZnhaasBleJsBridge`：
+
+```java
+WebView webView = findViewById(R.id.webView);
+webView.getSettings().setJavaScriptEnabled(true);
+webView.getSettings().setDomStorageEnabled(true);
+
+ZnhaasBleJsBridge bridge = new ZnhaasBleJsBridge(this, webView);
+bridge.attach(); // 默认注入 window.ZnhaasBleBridge
+```
+
+宿主 Activity 需要转发权限和蓝牙开启结果：
+
+```java
+@Override
+public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    bridge.onRequestPermissionsResult(requestCode, permissions, grantResults);
+}
+
+@Override
+protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    super.onActivityResult(requestCode, resultCode, data);
+    bridge.onActivityResult(requestCode);
+}
+```
+
+若加载远程 H5，请在宿主 App 中配置网络权限：
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+```
+
+### 11.2 H5 可调用方法
+
+```js
+window.ZnhaasBleBridge.getState()
+window.ZnhaasBleBridge.requestPermissions()
+window.ZnhaasBleBridge.requestEnableBluetooth()
+window.ZnhaasBleBridge.startScan(12000)
+window.ZnhaasBleBridge.stopScan()
+window.ZnhaasBleBridge.connect(address)
+window.ZnhaasBleBridge.disconnect()
+window.ZnhaasBleBridge.startRecord()
+window.ZnhaasBleBridge.stopRecord()
+window.ZnhaasBleBridge.queryRecordStatus()
+window.ZnhaasBleBridge.disableVideoKey()
+window.ZnhaasBleBridge.enableVideoKey()
+window.ZnhaasBleBridge.writeCommand(command)
+```
+
+### 11.3 原生事件回调
+
+SDK 会将原生异步事件派发给 H5：
+
+```js
+window.ZnhaasBle = {
+  onNativeEvent(event) {
+    console.log(event.type, event.data)
+  }
+}
+```
+
+同时也会派发浏览器事件：
+
+```js
+window.addEventListener('ZnhaasBleEvent', function (event) {
+  console.log(event.detail.type, event.detail.data)
+})
+```
+
+常用事件如下：
+
+| 事件 | 说明 |
+| --- | --- |
+| `state` | 蓝牙、权限、扫描、连接状态 |
+| `permissionsResult` | 运行时权限申请结果 |
+| `deviceFound` | 扫描到 `znhaas` 设备 |
+| `scanStopped` | 扫描结束 |
+| `deviceReady` | 连接并完成服务发现 |
+| `replyListenerEnabled` | 回包监听已开启 |
+| `commandDispatched` | H5 已发起控制命令 |
+| `writeSuccess` | BLE 写入成功 |
+| `deviceAck` | 收到 `V1|ACK|...` 业务 ACK |
+| `deviceReply` | 收到非 ACK 回包，`isReadFallback=true` 时仅表示诊断读值 |
+| `error` | 扫描、连接、写入等错误 |
+
+## 12. Demo 使用说明
+
+SDK Demo 已集成在项目 `app` 模块中，当前页面由 WebView 加载本地 H5：
+
+```text
+app/src/main/assets/znhaas_ble_demo.html
+```
+
+操作流程如下：
+
+1. 在 H5 页面点击 `申请权限`
+2. 点击 `开启蓝牙`
+3. 点击 `开始扫描`
+4. 在 H5 设备列表中点击目标安全帽设备
 5. 连接成功后点击对应控制按钮
-6. 在 `Runtime Log` 中查看发送结果和设备回传
+6. 在 H5 的 `Runtime Log` 中查看发送结果和设备 ACK
 
-## 12. 注意事项
+## 13. 注意事项
 
 1. 接入前请确保手机蓝牙已打开
 2. Android 12 及以上必须授予蓝牙运行时权限
 3. Android 6 到 Android 11 需要位置权限，否则 BLE 扫描可能失败
 4. 设备返回的通知数据建议按 UTF-8 文本解析
-5. 若需正式对外发布，请结合业务隐私政策与法务要求复核 SDK 权限说明
+5. H5 正式接入时建议只对可信页面开启 JSBridge，避免任意网页调用蓝牙能力
+6. 若需正式对外发布，请结合业务隐私政策与法务要求复核 SDK 权限说明
 
-## 13. 版本信息
+## 14. 版本信息
 
 - SDK 名称：`Znhaas BLE SDK`
 - 当前版本：`1.0.2`

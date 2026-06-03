@@ -1,1 +1,5 @@
-# Add consumer keep rules here if future BLE callbacks rely on reflection.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+-keep class com.znhaas.sdk.bridge.** { *; }
