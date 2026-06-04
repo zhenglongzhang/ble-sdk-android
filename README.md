@@ -15,7 +15,7 @@
 - 设备业务 ACK 优先使用 Notify/Indicate 监听，ACK 格式以 `V1|ACK|...` 开头
 - 如果 Reply 特征只能 Read，Demo 会在写入成功后读取一次作为诊断兜底；读到的 `RECORD|SUPPORTED` 属于能力说明，不代表本次命令 ACK
 - 按照《蓝牙控制.md》封装 5 个控制动作
-- 发送命令时不追加扩展字段
+- 控制命令支持可选追加任意键值对扩展字段
 - 提供 `ZnhaasBleJsBridge`，支持客户 H5 通过 WebView JSBridge 操作蓝牙
 
 ## 工程结构
@@ -31,6 +31,12 @@
 
 ```text
 V1|RECORD|ACTION|REQUEST_ID|TIMESTAMP
+```
+
+带业务扩展字段时格式如下，只有 key 和 value 都有值的字段才会按顺序追加：
+
+```text
+V1|RECORD|ACTION|REQUEST_ID|TIMESTAMP|key1=value1|key2=value2
 ```
 
 当前封装的 5 个动作如下：
@@ -49,6 +55,7 @@ V1|RECORD|0|req-1715155205000|1715155205000
 V1|RECORD|2|req-1715155210000|1715155210000
 V1|RECORD|3|req-1715155215000|1715155215000
 V1|RECORD|4|req-1715155220000|1715155220000
+V1|RECORD|1|req-1705939230000|1705939230000|work_order=WO-20250122|task_id=TASK-01
 ```
 
 ## SDK 用法
@@ -173,7 +180,17 @@ String requestId = bleClient.startRecord(new BleWriteListener() {
 });
 ```
 
-`requestId` 用于业务侧日志关联；当前 SDK 实际下发给设备的控制报文格式为 `V1|RECORD|ACTION|REQUEST_ID|TIMESTAMP`。
+`requestId` 用于业务侧日志关联；当前 SDK 实际下发给设备的控制报文格式为 `V1|RECORD|ACTION|REQUEST_ID|TIMESTAMP`，也可追加任意键值对业务字段。
+
+如需追加业务字段，可调用带 `Map<String, String>` 的重载方法：
+
+```java
+Map<String, String> extraFields = new LinkedHashMap<>();
+extraFields.put("work_order", "WO-20250122");
+extraFields.put("task_id", "TASK-01");
+
+String requestId = bleClient.startRecord(extraFields, writeListener);
+```
 
 ## 关键 API
 
@@ -192,6 +209,11 @@ String requestId = bleClient.startRecord(new BleWriteListener() {
 - `queryRecordStatus(...)`
 - `disableVideoKey(...)`
 - `enableVideoKey(...)`
+- `startRecord(extraFields, ...)`
+- `stopRecord(extraFields, ...)`
+- `queryRecordStatus(extraFields, ...)`
+- `disableVideoKey(extraFields, ...)`
+- `enableVideoKey(extraFields, ...)`
 
 辅助方法：
 
@@ -212,7 +234,19 @@ webView.getSettings().setJavaScriptEnabled(true);
 webView.getSettings().setDomStorageEnabled(true);
 
 ZnhaasBleJsBridge bridge = new ZnhaasBleJsBridge(this, webView);
-bridge.attach(); // 默认注入 window.ZnhaasBleBridge
+bridge.attach(); // 注入内部原生桥接对象
+```
+
+为了让 H5 使用 `window.ZnhaasBleBridge` 并直接传对象参数，页面加载完成后需要注入 JS 包装层：
+
+```java
+webView.setWebViewClient(new WebViewClient() {
+    @Override
+    public void onPageFinished(WebView view, String url) {
+        super.onPageFinished(view, url);
+        bridge.installJavascriptFacade();
+    }
+});
 ```
 
 宿主 Activity 需要转发权限和蓝牙开启结果：
@@ -245,6 +279,11 @@ window.ZnhaasBleBridge.stopRecord()
 window.ZnhaasBleBridge.queryRecordStatus()
 window.ZnhaasBleBridge.disableVideoKey()
 window.ZnhaasBleBridge.enableVideoKey()
+
+window.ZnhaasBleBridge.startRecord({
+  work_order: 'WO-20250122',
+  task_id: 'TASK-01'
+})
 ```
 
 原生事件统一回调到：

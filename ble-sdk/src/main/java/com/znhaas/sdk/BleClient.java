@@ -36,7 +36,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -116,7 +115,11 @@ public class BleClient {
     }
 
     public boolean isBluetoothEnabled() {
-        return bluetoothAdapter != null && bluetoothAdapter.isEnabled();
+        try {
+            return bluetoothAdapter != null && bluetoothAdapter.isEnabled();
+        } catch (SecurityException exception) {
+            return false;
+        }
     }
 
     public boolean hasRequiredPermissions() {
@@ -185,12 +188,19 @@ public class BleClient {
         if (!isBluetoothSupported()) {
             return false;
         }
+        if (!hasRequiredPermissions()) {
+            return false;
+        }
         if (isBluetoothEnabled()) {
             return true;
         }
         Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-        activity.startActivityForResult(enableIntent, requestCode);
-        return true;
+        try {
+            activity.startActivityForResult(enableIntent, requestCode);
+            return true;
+        } catch (SecurityException exception) {
+            return false;
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -377,26 +387,50 @@ public class BleClient {
         return sendRecordAction(RecordAction.START_RECORD, listener);
     }
 
+    public String startRecord(Map<String, String> extraFields, BleWriteListener listener) {
+        return sendRecordAction(RecordAction.START_RECORD, extraFields, listener);
+    }
+
     public String stopRecord(BleWriteListener listener) {
         return sendRecordAction(RecordAction.STOP_RECORD, listener);
+    }
+
+    public String stopRecord(Map<String, String> extraFields, BleWriteListener listener) {
+        return sendRecordAction(RecordAction.STOP_RECORD, extraFields, listener);
     }
 
     public String queryRecordStatus(BleWriteListener listener) {
         return sendRecordAction(RecordAction.QUERY_STATUS, listener);
     }
 
+    public String queryRecordStatus(Map<String, String> extraFields, BleWriteListener listener) {
+        return sendRecordAction(RecordAction.QUERY_STATUS, extraFields, listener);
+    }
+
     public String disableVideoKey(BleWriteListener listener) {
         return sendRecordAction(RecordAction.DISABLE_VIDEO_KEY, listener);
+    }
+
+    public String disableVideoKey(Map<String, String> extraFields, BleWriteListener listener) {
+        return sendRecordAction(RecordAction.DISABLE_VIDEO_KEY, extraFields, listener);
     }
 
     public String enableVideoKey(BleWriteListener listener) {
         return sendRecordAction(RecordAction.ENABLE_VIDEO_KEY, listener);
     }
 
+    public String enableVideoKey(Map<String, String> extraFields, BleWriteListener listener) {
+        return sendRecordAction(RecordAction.ENABLE_VIDEO_KEY, extraFields, listener);
+    }
+
     public String sendRecordAction(RecordAction action, BleWriteListener listener) {
+        return sendRecordAction(action, null, listener);
+    }
+
+    public String sendRecordAction(RecordAction action, Map<String, String> extraFields, BleWriteListener listener) {
         String requestId = buildRequestId(action);
         long timestamp = System.currentTimeMillis();
-        String command = buildRecordCommand(action, requestId, timestamp);
+        String command = buildRecordCommand(action, requestId, timestamp, extraFields);
         writeFixedAsciiCommand(command, listener);
         return requestId;
     }
@@ -407,7 +441,18 @@ public class BleClient {
     }
 
     public String buildRecordCommand(RecordAction action, String requestId, long timestamp) {
-        return "V1|RECORD|" + action.getCode() + "|" + requestId + "|" + timestamp;
+        return buildRecordCommand(action, requestId, timestamp, null);
+    }
+
+    public String buildRecordCommand(RecordAction action, String requestId, long timestamp, Map<String, String> extraFields) {
+        StringBuilder command = new StringBuilder("V1|RECORD|")
+                .append(action.getCode())
+                .append("|")
+                .append(requestId)
+                .append("|")
+                .append(timestamp);
+        appendRecordFields(command, extraFields);
+        return command.toString();
     }
 
     public void release() {
@@ -713,8 +758,49 @@ public class BleClient {
     }
 
     private String buildRequestId(RecordAction action) {
-        String actionName = action.name().toLowerCase(Locale.US);
         return "req-" + System.currentTimeMillis();
+    }
+
+    private void appendRecordFields(StringBuilder command, Map<String, String> extraFields) {
+        if (extraFields == null || extraFields.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, String> entry : extraFields.entrySet()) {
+            appendRecordField(command, entry.getKey(), entry.getValue());
+        }
+    }
+
+    private void appendRecordField(StringBuilder command, String key, String value) {
+        String sanitizedKey = sanitizeRecordKey(key);
+        String sanitizedValue = sanitizeRecordValue(value);
+        if (sanitizedKey.isEmpty() || sanitizedValue.isEmpty()) {
+            return;
+        }
+        command.append("|")
+                .append(sanitizedKey)
+                .append("=")
+                .append(sanitizedValue);
+    }
+
+    private String sanitizeRecordKey(String key) {
+        if (key == null) {
+            return "";
+        }
+        return key.trim()
+                .replace("|", "")
+                .replace("=", "")
+                .replace("\n", "")
+                .replace("\r", "");
+    }
+
+    private String sanitizeRecordValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim()
+                .replace("|", "")
+                .replace("\n", "")
+                .replace("\r", "");
     }
 
     private interface InternalBleListener {

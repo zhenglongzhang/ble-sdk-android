@@ -33,7 +33,15 @@ public class MainActivity extends AppCompatActivity {
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
 
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (jsBridge != null) {
+                    jsBridge.installJavascriptFacade();
+                }
+            }
+        });
         webView.setWebChromeClient(new WebChromeClient());
 
         jsBridge = new ZnhaasBleJsBridge(this, webView);

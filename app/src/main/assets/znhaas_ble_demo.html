@@ -97,6 +97,48 @@
       grid-template-columns: 1fr 1fr;
     }
 
+    .field-stack {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .field-row {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 0.78fr 1.22fr;
+    }
+
+    .field {
+      background: #f8fbff;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      display: grid;
+      gap: 7px;
+      padding: 11px 12px;
+    }
+
+    .field span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .field input {
+      appearance: none;
+      background: transparent;
+      border: 0;
+      color: var(--ink);
+      font: inherit;
+      font-size: 15px;
+      outline: none;
+      padding: 0;
+    }
+
+    .field input::placeholder {
+      color: #9aa9b8;
+    }
+
     button {
       appearance: none;
       border: 0;
@@ -217,6 +259,10 @@
       .grid {
         grid-template-columns: 1fr;
       }
+
+      .field-row {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -270,6 +316,28 @@
       <h2>录像控制</h2>
       <span class="pill">V1|RECORD</span>
     </div>
+    <div class="field-stack">
+      <div class="field-row">
+        <label class="field">
+          <span>扩展字段名 1</span>
+          <input id="extraKey1" type="text" inputmode="text" autocomplete="off" value="work_order" placeholder="work_order">
+        </label>
+        <label class="field">
+          <span>扩展字段值 1</span>
+          <input id="extraValue1" type="text" inputmode="text" autocomplete="off" placeholder="WO-20250122">
+        </label>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span>扩展字段名 2</span>
+          <input id="extraKey2" type="text" inputmode="text" autocomplete="off" value="task_id" placeholder="task_id">
+        </label>
+        <label class="field">
+          <span>扩展字段值 2</span>
+          <input id="extraValue2" type="text" inputmode="text" autocomplete="off" placeholder="TASK-01">
+        </label>
+      </div>
+    </div>
     <div class="grid">
       <button onclick="callCommand('startRecord')">开始录制</button>
       <button onclick="callCommand('stopRecord')">停止录制</button>
@@ -293,6 +361,26 @@
       bridgeReady: false,
     };
 
+    const directBridgeMethods = [
+      'getState',
+      'getRequiredPermissions',
+      'requestPermissions',
+      'requestEnableBluetooth',
+      'startScan',
+      'stopScan',
+      'connect',
+      'disconnect',
+      'writeCommand',
+    ];
+
+    const recordCommandMethods = [
+      'startRecord',
+      'stopRecord',
+      'queryRecordStatus',
+      'disableVideoKey',
+      'enableVideoKey',
+    ];
+
     window.ZnhaasBle = {
       __dispatch(payload) {
         const event = typeof payload === 'string' ? JSON.parse(payload) : payload;
@@ -307,7 +395,57 @@
     };
 
     function bridge() {
-      return window.ZnhaasBleBridge;
+      installBridgeFacade();
+      return window.__ZnhaasBleBridgeFacade || window.ZnhaasBleBridge;
+    }
+
+    function nativeBridge() {
+      return window.__ZnhaasBleNativeBridge
+        || (window.ZnhaasBleBridge && !window.ZnhaasBleBridge.__isZnhaasFacade ? window.ZnhaasBleBridge : null);
+    }
+
+    function installBridgeFacade() {
+      const native = nativeBridge();
+      if (!native || window.__ZnhaasBleBridgeFacade) {
+        return;
+      }
+      const facade = {};
+      directBridgeMethods.forEach(method => {
+        facade[method] = (...args) => native[method](...args);
+      });
+      recordCommandMethods.forEach(method => {
+        facade[method] = extraFields => {
+          const json = stringifyExtraFields(extraFields);
+          if (!json) {
+            return native[method]();
+          }
+          return native[method + 'Json'](json);
+        };
+      });
+      Object.defineProperty(facade, '__isZnhaasFacade', { value: true });
+      window.__ZnhaasBleBridgeFacade = facade;
+      try {
+        window.ZnhaasBleBridge = facade;
+      } catch (error) {
+        // Some WebView versions keep the injected object read-only; the demo still uses the facade fallback.
+      }
+    }
+
+    function stringifyExtraFields(extraFields) {
+      if (!extraFields) {
+        return '';
+      }
+      if (typeof extraFields === 'string') {
+        return extraFields.trim();
+      }
+      if (typeof extraFields !== 'object') {
+        return '';
+      }
+      const entries = Object.entries(extraFields).filter(([key, value]) => String(key).trim() && String(value ?? '').trim());
+      if (!entries.length) {
+        return '';
+      }
+      return JSON.stringify(Object.fromEntries(entries));
     }
 
     function ensureBridge() {
@@ -325,7 +463,10 @@
 
     function enableBluetooth() {
       if (!ensureBridge()) return;
-      bridge().requestEnableBluetooth();
+      const handled = bridge().requestEnableBluetooth();
+      if (!handled) {
+        log('开启蓝牙前需要先完成 BLE 权限授权，已自动发起权限申请。');
+      }
     }
 
     function startScan() {
@@ -359,8 +500,34 @@
 
     function callCommand(method) {
       if (!ensureBridge()) return;
-      const requestId = bridge()[method]();
-      log(method + ' dispatched, requestId=' + requestId);
+      const extras = getCommandExtras();
+      const requestId = bridge()[method](extras);
+      log(method + ' dispatched, requestId=' + requestId + formatCommandExtras(extras));
+    }
+
+    function getCommandExtras() {
+      const extras = {};
+      collectExtraField(extras, 'extraKey1', 'extraValue1');
+      collectExtraField(extras, 'extraKey2', 'extraValue2');
+      return extras;
+    }
+
+    function collectExtraField(extras, keyId, valueId) {
+      const key = getInputValue(keyId);
+      const value = getInputValue(valueId);
+      if (key && value) {
+        extras[key] = value;
+      }
+    }
+
+    function getInputValue(id) {
+      const input = document.getElementById(id);
+      return input ? input.value.trim() : '';
+    }
+
+    function formatCommandExtras(extras) {
+      const parts = Object.entries(extras).map(([key, value]) => key + '=' + value);
+      return parts.length ? ', ' + parts.join(', ') : '';
     }
 
     function handleNativeEvent(event) {
@@ -418,7 +585,7 @@
         log('Error [' + type + ']: ' + (data.message || JSON.stringify(data)));
       }
       if (type === 'commandDispatched') {
-        log('Command dispatched: ' + data.action + ', requestId=' + data.requestId);
+        log('Command dispatched: ' + data.action + ', requestId=' + data.requestId + ', command=' + data.command);
       }
       if (type === 'log') {
         log(data.message || '');
@@ -437,7 +604,7 @@
       const list = Array.from(state.devices.values());
       setText('deviceCount', list.length + ' 台');
       if (!list.length) {
-        root.innerHTML = '<div class="empty">点击开始扫描，发现 znhaas_23070401 这类设备后点卡片连接</div>';
+        root.innerHTML = '<div class="empty">点击开始扫描，发现 znhaas_******* 这类设备后点卡片连接</div>';
         return;
       }
       root.innerHTML = list.map(device => `

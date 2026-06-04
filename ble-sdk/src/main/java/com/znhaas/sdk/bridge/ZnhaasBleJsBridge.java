@@ -26,8 +26,11 @@ import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -39,6 +42,7 @@ public class ZnhaasBleJsBridge implements
         BleWriteListener {
 
     public static final String DEFAULT_JS_INTERFACE_NAME = "ZnhaasBleBridge";
+    public static final String DEFAULT_NATIVE_JS_INTERFACE_NAME = "__ZnhaasBleNativeBridge";
     public static final int DEFAULT_ENABLE_BLUETOOTH_REQUEST_CODE = 41001;
     public static final int DEFAULT_PERMISSION_REQUEST_CODE = 41002;
     public static final long DEFAULT_SCAN_DURATION_MS = 12_000L;
@@ -52,6 +56,7 @@ public class ZnhaasBleJsBridge implements
 
     private boolean fixedReplySupportsRead;
     private boolean pendingReadFallback;
+    private boolean enableBluetoothAfterPermission;
 
     public ZnhaasBleJsBridge(Activity activity, WebView webView) {
         this.activity = activity;
@@ -70,7 +75,21 @@ public class ZnhaasBleJsBridge implements
 
     @SuppressLint("JavascriptInterface")
     public void attach(String interfaceName) {
-        webView.addJavascriptInterface(this, interfaceName);
+        webView.addJavascriptInterface(this, DEFAULT_NATIVE_JS_INTERFACE_NAME);
+    }
+
+    public void installJavascriptFacade() {
+        installJavascriptFacade(DEFAULT_JS_INTERFACE_NAME);
+    }
+
+    public void installJavascriptFacade(String interfaceName) {
+        final String script = buildJavascriptFacade(interfaceName);
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                webView.evaluateJavascript(script, null);
+            }
+        });
     }
 
     public void release() {
@@ -97,6 +116,12 @@ public class ZnhaasBleJsBridge implements
         put(data, "granted", granted);
         emitState();
         emit("permissionsResult", data);
+        if (granted && enableBluetoothAfterPermission) {
+            enableBluetoothAfterPermission = false;
+            requestEnableBluetooth();
+        } else if (!granted) {
+            enableBluetoothAfterPermission = false;
+        }
     }
 
     public void onActivityResult(int requestCode) {
@@ -146,10 +171,19 @@ public class ZnhaasBleJsBridge implements
             emitError("bluetooth", "BLE is not supported on this device.");
             return false;
         }
+        if (!bleClient.hasRequiredPermissions()) {
+            enableBluetoothAfterPermission = true;
+            requestPermissions();
+            emitError("permission", "Missing BLE runtime permissions. Requesting permissions before enabling Bluetooth.");
+            return false;
+        }
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
-                bleClient.requestEnableBluetooth(activity, DEFAULT_ENABLE_BLUETOOTH_REQUEST_CODE);
+                boolean handled = bleClient.requestEnableBluetooth(activity, DEFAULT_ENABLE_BLUETOOTH_REQUEST_CODE);
+                if (!handled && !bleClient.isBluetoothEnabled()) {
+                    emitError("bluetooth", "Unable to request Bluetooth enable. Please check BLE permissions.");
+                }
             }
         });
         return true;
@@ -219,8 +253,18 @@ public class ZnhaasBleJsBridge implements
     }
 
     @JavascriptInterface
+    public String startRecordJson(String extraFieldsJson) {
+        return sendAction("startRecord", BleClient.RecordAction.START_RECORD, extraFieldsJson);
+    }
+
+    @JavascriptInterface
     public String stopRecord() {
         return sendAction("stopRecord", BleClient.RecordAction.STOP_RECORD);
+    }
+
+    @JavascriptInterface
+    public String stopRecordJson(String extraFieldsJson) {
+        return sendAction("stopRecord", BleClient.RecordAction.STOP_RECORD, extraFieldsJson);
     }
 
     @JavascriptInterface
@@ -229,13 +273,28 @@ public class ZnhaasBleJsBridge implements
     }
 
     @JavascriptInterface
+    public String queryRecordStatusJson(String extraFieldsJson) {
+        return sendAction("queryRecordStatus", BleClient.RecordAction.QUERY_STATUS, extraFieldsJson);
+    }
+
+    @JavascriptInterface
     public String disableVideoKey() {
         return sendAction("disableVideoKey", BleClient.RecordAction.DISABLE_VIDEO_KEY);
     }
 
     @JavascriptInterface
+    public String disableVideoKeyJson(String extraFieldsJson) {
+        return sendAction("disableVideoKey", BleClient.RecordAction.DISABLE_VIDEO_KEY, extraFieldsJson);
+    }
+
+    @JavascriptInterface
     public String enableVideoKey() {
         return sendAction("enableVideoKey", BleClient.RecordAction.ENABLE_VIDEO_KEY);
+    }
+
+    @JavascriptInterface
+    public String enableVideoKeyJson(String extraFieldsJson) {
+        return sendAction("enableVideoKey", BleClient.RecordAction.ENABLE_VIDEO_KEY, extraFieldsJson);
     }
 
     @JavascriptInterface
@@ -259,13 +318,19 @@ public class ZnhaasBleJsBridge implements
     }
 
     private String sendAction(String actionName, BleClient.RecordAction action) {
+        return sendAction(actionName, action, null);
+    }
+
+    private String sendAction(String actionName, BleClient.RecordAction action, String extraFieldsJson) {
         final long timestamp = System.currentTimeMillis();
         final String requestId = "req-" + timestamp;
-        final String command = bleClient.buildRecordCommand(action, requestId, timestamp);
+        final Map<String, String> extraFields = parseExtraFields(extraFieldsJson);
+        final String command = bleClient.buildRecordCommand(action, requestId, timestamp, extraFields);
         JSONObject data = new JSONObject();
         put(data, "action", actionName);
         put(data, "requestId", requestId);
         put(data, "command", command);
+        put(data, "extraFields", extraFieldsToJson(extraFields));
         emit("commandDispatched", data);
         mainHandler.post(new Runnable() {
             @Override
@@ -274,6 +339,39 @@ public class ZnhaasBleJsBridge implements
             }
         });
         return requestId;
+    }
+
+    private Map<String, String> parseExtraFields(String extraFieldsJson) {
+        Map<String, String> extraFields = new LinkedHashMap<>();
+        if (extraFieldsJson == null || extraFieldsJson.trim().isEmpty()) {
+            return extraFields;
+        }
+        try {
+            JSONObject json = new JSONObject(extraFieldsJson);
+            Iterator<String> keys = json.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                String normalizedKey = key != null ? key.trim() : "";
+                String value = json.isNull(key) ? "" : String.valueOf(json.opt(key)).trim();
+                if (!normalizedKey.isEmpty() && !value.isEmpty()) {
+                    extraFields.put(normalizedKey, value);
+                }
+            }
+        } catch (JSONException exception) {
+            emitError("recordCommand", "Invalid extra fields JSON: " + exception.getMessage());
+        }
+        return extraFields;
+    }
+
+    private JSONObject extraFieldsToJson(Map<String, String> extraFields) {
+        JSONObject json = new JSONObject();
+        if (extraFields == null || extraFields.isEmpty()) {
+            return json;
+        }
+        for (Map.Entry<String, String> entry : extraFields.entrySet()) {
+            put(json, entry.getKey(), entry.getValue());
+        }
+        return json;
     }
 
     @Override
@@ -522,6 +620,31 @@ public class ZnhaasBleJsBridge implements
                 );
             }
         });
+    }
+
+    private String buildJavascriptFacade(String interfaceName) {
+        String targetName = interfaceName == null || interfaceName.trim().isEmpty()
+                ? DEFAULT_JS_INTERFACE_NAME
+                : interfaceName.trim();
+        return "(function(){"
+                + "var native=window." + DEFAULT_NATIVE_JS_INTERFACE_NAME + "||window." + targetName + ";"
+                + "if(!native){return;}"
+                + "var direct=['getState','getRequiredPermissions','requestPermissions','requestEnableBluetooth','startScan','stopScan','connect','disconnect','writeCommand'];"
+                + "var commands=['startRecord','stopRecord','queryRecordStatus','disableVideoKey','enableVideoKey'];"
+                + "function stringify(extra){"
+                + "if(!extra){return '';}"
+                + "if(typeof extra==='string'){return extra.trim();}"
+                + "if(typeof extra!=='object'){return '';}"
+                + "var out={};"
+                + "Object.keys(extra).forEach(function(key){var value=extra[key]==null?'':extra[key];if(String(key).trim()&&String(value).trim()){out[key]=value;}});"
+                + "return Object.keys(out).length?JSON.stringify(out):'';"
+                + "}"
+                + "var facade={__isZnhaasFacade:true};"
+                + "direct.forEach(function(method){facade[method]=function(){return native[method].apply(native,arguments);};});"
+                + "commands.forEach(function(method){facade[method]=function(extra){var json=stringify(extra);return json?native[method+'Json'](json):native[method]();};});"
+                + "window.__ZnhaasBleBridgeFacade=facade;"
+                + "try{window." + targetName + "=facade;}catch(e){}"
+                + "})();";
     }
 
     private JSONObject deviceToJson(BleDevice device) {

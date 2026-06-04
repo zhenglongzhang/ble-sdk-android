@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Znhaas BLE Demo</string>
+    <string name="app_name">ZNZL</string>
     <string name="demo_title">Znhaas BLE Control Demo</string>
     <string name="demo_subtitle">Only scans BLE names starting with znhaas, connects when you tap a matched device, and exposes the 5 control actions from the ASCII control spec.</string>
     <string name="check_bluetooth">Check Bluetooth</string>
