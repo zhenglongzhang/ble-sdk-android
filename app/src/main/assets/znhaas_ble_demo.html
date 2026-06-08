@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -52,6 +53,7 @@
       line-height: 1.08;
       letter-spacing: -0.04em;
     }
+    a { color: var(--brand); text-decoration: none; font-weight: 800; }
 
     .subtitle {
       margin: 0;
@@ -266,9 +268,10 @@
     }
   </style>
 </head>
+
 <body>
+  <a href="znhaas_app_tests.html">返回测试入口</a>
   <section class="hero">
-    <div class="eyebrow">Znhaas BLE JSBridge</div>
     <h1>H5 控制蓝牙安全帽</h1>
     <p class="subtitle">页面通过 Android WebView JSBridge 调用原生 BLE SDK，支持扫描、连接、录像控制和 ACK 监听。</p>
   </section>
@@ -320,7 +323,8 @@
       <div class="field-row">
         <label class="field">
           <span>扩展字段名 1</span>
-          <input id="extraKey1" type="text" inputmode="text" autocomplete="off" value="work_order" placeholder="work_order">
+          <input id="extraKey1" type="text" inputmode="text" autocomplete="off" value="work_order"
+            placeholder="work_order">
         </label>
         <label class="field">
           <span>扩展字段值 1</span>
@@ -579,7 +583,7 @@
       }
       if (type === 'deviceReply') {
         const prefix = data.isReadFallback ? 'Read fallback value (not ACK): ' : 'Device reply: ';
-        log(prefix + data.value );
+        log(prefix + data.value);
       }
       if (type === 'error' || type === 'connectionError' || type === 'writeError' || type === 'replyChannelError') {
         log('Error [' + type + ']: ' + (data.message || JSON.stringify(data)));
@@ -656,4 +660,5 @@
     });
   </script>
 </body>
+
 </html>
