@@ -27,8 +27,8 @@
   - Write UUID：`6E400003-B5A3-F393-E0A9-E50E24DCCA9E`
   - Reply UUID：`6E400002-B5A3-F393-E0A9-E50E24DCCA9E`
 - 连接设备并完成服务发现后，SDK 会自动请求 MTU `517`
-- 设备业务 ACK 优先使用 Notify/Indicate 监听，ACK 格式以 `V1|ACK|...` 开头
-- 如果 Reply 特征只能 Read，可通过 SDK 读取一次作为诊断兜底；读到的 `RECORD|SUPPORTED` 属于能力说明，不代表本次命令 ACK
+- 设备业务回复优先使用 Notify/Indicate 监听，v2 回复格式为 `2|R|...`
+- 如果 Reply 特征只能 Read，可通过 SDK 读取一次作为诊断兜底
 
 ## 3. Android SDK 集成说明
 
@@ -240,31 +240,30 @@ bleClient.enableNotification(
 - 设备回传数据通过 `onCharacteristicChanged(...)` 回调
 - 回调同时提供原始字节数组和十六进制字符串
 - 对于 ASCII 协议，业务层可按 UTF-8 文本进一步解析
-- 若设备 Reply 特征不支持 Notify/Indicate，但支持 Read，可在写入成功后调用 `readFixedReply(...)` 读取诊断值；业务成功与否应以 `V1|ACK|...` 格式的 ACK 为准
+- 若设备 Reply 特征不支持 Notify/Indicate，但支持 Read，可在写入成功后调用 `readFixedReply(...)` 读取诊断值；业务成功与否应以 v2 回复中的 `statusCode` 为准
 
 ## 9. 录像控制指令说明
 
-当前 SDK 按《蓝牙控制.md》封装了 5 个控制动作，并支持可选追加任意键值对扩展字段。
+当前 SDK 按《蓝牙录制控制协议 v2.0》封装录制控制动作。
 
 统一消息格式：
 
 ```text
-V1|RECORD|ACTION|REQUEST_ID|TIMESTAMP
+VERSION|CMD_TYPE|COMMAND|ACTION|REQ_ID|TIMESTAMP|P1|P2|P3|P4|P5|P6|P7|P8\n
 ```
 
-带业务扩展字段时格式如下，只有 key 和 value 都有值的字段才会按顺序追加：
+命令下发固定使用：
 
 ```text
-V1|RECORD|ACTION|REQUEST_ID|TIMESTAMP|key1=value1|key2=value2
+2|C|COMMAND|ACTION|REQ_ID|TIMESTAMP|work_order|task_id|device_id|||||
 ```
 
-5 个动作如下：
+动作如下：
 
-1. 开始录制：`startRecord(...)`
-2. 停止录制：`stopRecord(...)`
-3. 查询状态：`queryRecordStatus(...)`
-4. 禁止视频物理按键：`disableVideoKey(...)`
-5. 启用视频物理按键：`enableVideoKey(...)`
+1. 停止录制：`stopRecord(...)`
+2. 开始录制并禁用视频物理按键：`disableVideoKey(...)`
+3. 开始录制并启用视频物理按键：`enableVideoKey(...)`
+4. 查询状态：`queryRecordStatus(...)`
 
 示例代码：
 
@@ -280,31 +279,31 @@ String requestId = bleClient.startRecord(new BleWriteListener() {
 });
 ```
 
-如需随指令追加业务字段：
+如需随指令下发固定业务字段：
 
 ```java
 Map<String, String> extraFields = new LinkedHashMap<>();
 extraFields.put("work_order", "WO-20250122");
 extraFields.put("task_id", "TASK-01");
+extraFields.put("device_id", "31011500991325140052");
 
-String requestId = bleClient.startRecord(extraFields, writeListener);
+String requestId = bleClient.disableVideoKey(extraFields, writeListener);
 ```
 
 说明：
 
 - `requestId` 用于业务侧调用日志关联
-- `requestId` 会拼接进设备控制报文，用于和设备返回的 `V1|ACK|...` 进行链路关联
-- 扩展字段会追加在指令末尾，例如：`V1|RECORD|1|req-1705939230000|1705939230000|work_order=WO-20250122|task_id=TASK-01`
+- `requestId` 会拼接进设备控制报文，用于和设备返回的 v2 回复进行链路关联
+- 开始/停止录制会下发 `work_order`、`task_id`、`device_id` 固定字段，其中 `device_id` 可选
 
 动作与协议值映射如下：
 
-| 方法 | ACTION 值 | 说明 |
-|------|-----------|------|
-| `startRecord(...)` | `1` | 开始录制 |
-| `stopRecord(...)` | `0` | 停止录制 |
-| `queryRecordStatus(...)` | `2` | 查询录制状态 |
-| `disableVideoKey(...)` | `3` | 禁止视频物理按键 |
-| `enableVideoKey(...)` | `4` | 启用视频物理按键 |
+| 方法 | COMMAND | ACTION | 说明 |
+|------|---------|--------|------|
+| `stopRecord(...)` | `0` | `0` | 停止录制 |
+| `disableVideoKey(...)` | `0` | `1` | 开始录制并禁用视频物理按键 |
+| `enableVideoKey(...)` | `0` | `2` | 开始录制并启用视频物理按键 |
+| `queryRecordStatus(...)` | `1` | `3` | 查询录制状态 |
 
 ## 10. 常用回调说明
 
@@ -404,15 +403,16 @@ window.ZnhaasBleBridge.startScan(12000)
 window.ZnhaasBleBridge.stopScan()
 window.ZnhaasBleBridge.connect(address)
 window.ZnhaasBleBridge.disconnect()
-window.ZnhaasBleBridge.startRecord()
+// window.ZnhaasBleBridge.startRecord()
 window.ZnhaasBleBridge.stopRecord()
 window.ZnhaasBleBridge.queryRecordStatus()
 window.ZnhaasBleBridge.disableVideoKey()
 window.ZnhaasBleBridge.enableVideoKey()
 
-window.ZnhaasBleBridge.startRecord({
+window.ZnhaasBleBridge.disableVideoKey({
   work_order: 'WO-20250122',
-  task_id: 'TASK-01'
+  task_id: 'TASK-01',
+  device_id: '31011500991325140052'
 })
 window.ZnhaasBleBridge.writeCommand(command)
 ```
@@ -450,8 +450,8 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
 | `replyListenerEnabled` | 回包监听已开启 |
 | `commandDispatched` | H5 已发起控制命令 |
 | `writeSuccess` | BLE 写入成功 |
-| `deviceAck` | 收到 `V1|ACK|...` 业务 ACK |
-| `deviceReply` | 收到非 ACK 回包，`isReadFallback=true` 时仅表示诊断读值 |
+| `deviceAck` | 收到 v2 业务回复，结构化字段在 `data.response` |
+| `deviceReply` | 收到非 v2 回包，`isReadFallback=true` 时仅表示诊断读值 |
 | `error` | 扫描、连接、写入等错误 |
 
 ## 12. Demo 使用说明
@@ -469,7 +469,7 @@ app/src/main/assets/znhaas_ble_demo.html
 3. 点击 `开始扫描`
 4. 在 H5 设备列表中点击目标安全帽设备
 5. 连接成功后点击对应控制按钮
-6. 在 H5 的 `Runtime Log` 中查看发送结果和设备 ACK
+6. 在 H5 的 `Runtime Log` 中查看发送结果和设备回复
 
 ## 13. 注意事项
 

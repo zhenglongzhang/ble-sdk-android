@@ -12,10 +12,10 @@
   - Write UUID: `6E400003-B5A3-F393-E0A9-E50E24DCCA9E`
   - Reply UUID: `6E400002-B5A3-F393-E0A9-E50E24DCCA9E`
 - 连接设备并完成服务发现后，SDK 会自动请求 MTU `517`
-- 设备业务 ACK 优先使用 Notify/Indicate 监听，ACK 格式以 `V1|ACK|...` 开头
-- 如果 Reply 特征只能 Read，Demo 会在写入成功后读取一次作为诊断兜底；读到的 `RECORD|SUPPORTED` 属于能力说明，不代表本次命令 ACK
-- 按照《蓝牙控制.md》封装 5 个控制动作
-- 控制命令支持可选追加任意键值对扩展字段
+- 设备业务回复优先使用 Notify/Indicate 监听，v2 回复格式为 `2|R|...`
+- 如果 Reply 特征只能 Read，Demo 会在写入成功后读取一次作为诊断兜底
+- 按照《蓝牙录制控制协议 v2.0》封装录制控制动作
+- 控制命令使用固定 14 位字段：`work_order`、`task_id`、`device_id`
 - 提供 `ZnhaasBleJsBridge`，支持客户 H5 通过 WebView JSBridge 操作蓝牙
 
 ## 工程结构
@@ -25,37 +25,34 @@
 - `app`
   - WebView + 本地 H5 Demo
 
-## 5 个控制动作
+## 录制控制协议 v2
 
 协议统一格式：
 
 ```text
-V1|RECORD|ACTION|REQUEST_ID|TIMESTAMP
+VERSION|CMD_TYPE|COMMAND|ACTION|REQ_ID|TIMESTAMP|P1|P2|P3|P4|P5|P6|P7|P8\n
 ```
 
-带业务扩展字段时格式如下，只有 key 和 value 都有值的字段才会按顺序追加：
+当前下发命令固定使用：
 
 ```text
-V1|RECORD|ACTION|REQUEST_ID|TIMESTAMP|key1=value1|key2=value2
+2|C|COMMAND|ACTION|REQ_ID|TIMESTAMP|work_order|task_id|device_id|||||
 ```
 
-当前封装的 5 个动作如下：
+当前封装动作如下：
 
-1. 开始录制：`ACTION = 1`
-2. 停止录制：`ACTION = 0`
-3. 查询状态：`ACTION = 2`
-4. 禁止视频物理按键：`ACTION = 3`
-5. 启用视频物理按键：`ACTION = 4`
+1. 停止录制：`COMMAND=0`，`ACTION=0`
+2. 开始录制并禁用视频物理按键：`COMMAND=0`，`ACTION=1`
+3. 开始录制并启用视频物理按键：`COMMAND=0`，`ACTION=2`
+4. 查询状态：`COMMAND=1`，`ACTION=3`
 
 示例：
 
 ```text
-V1|RECORD|1|req-1715155200000|1715155200000
-V1|RECORD|0|req-1715155205000|1715155205000
-V1|RECORD|2|req-1715155210000|1715155210000
-V1|RECORD|3|req-1715155215000|1715155215000
-V1|RECORD|4|req-1715155220000|1715155220000
-V1|RECORD|1|req-1705939230000|1705939230000|work_order=WO-20250122|task_id=TASK-01
+2|C|0|1|req-1705939230000|1705939230000|WO-20250122|TASK-01|31011500991325140052|||||
+2|C|0|2|req-1705939230000|1705939230000|WO-20250122|TASK-01|31011500991325140052|||||
+2|C|0|0|req-1705939300000|1705939300000|WO-20250122|TASK-01|31011500991325140052|||||
+2|C|1|3|req-1705939400000|1705939400000||||||||
 ```
 
 ## SDK 用法
@@ -180,16 +177,17 @@ String requestId = bleClient.startRecord(new BleWriteListener() {
 });
 ```
 
-`requestId` 用于业务侧日志关联；当前 SDK 实际下发给设备的控制报文格式为 `V1|RECORD|ACTION|REQUEST_ID|TIMESTAMP`，也可追加任意键值对业务字段。
+`requestId` 用于业务侧日志关联；当前 SDK 实际下发给设备的是 v2 固定 14 位控制报文。
 
-如需追加业务字段，可调用带 `Map<String, String>` 的重载方法：
+如需下发固定业务字段，可调用带 `Map<String, String>` 的重载方法。当前 v2 协议只取 `work_order`、`task_id`、`device_id`：
 
 ```java
 Map<String, String> extraFields = new LinkedHashMap<>();
 extraFields.put("work_order", "WO-20250122");
 extraFields.put("task_id", "TASK-01");
+extraFields.put("device_id", "31011500991325140052");
 
-String requestId = bleClient.startRecord(extraFields, writeListener);
+String requestId = bleClient.disableVideoKey(extraFields, writeListener);
 ```
 
 ## 关键 API
@@ -280,9 +278,10 @@ window.ZnhaasBleBridge.queryRecordStatus()
 window.ZnhaasBleBridge.disableVideoKey()
 window.ZnhaasBleBridge.enableVideoKey()
 
-window.ZnhaasBleBridge.startRecord({
+window.ZnhaasBleBridge.disableVideoKey({
   work_order: 'WO-20250122',
-  task_id: 'TASK-01'
+  task_id: 'TASK-01',
+  device_id: '31011500991325140052'
 })
 ```
 
@@ -301,8 +300,8 @@ window.ZnhaasBle = {
 - `deviceFound`：扫描到 `znhaas` 设备
 - `deviceReady`：连接并完成服务发现
 - `writeSuccess`：命令写入成功
-- `deviceAck`：收到 `V1|ACK|...` 业务 ACK
-- `deviceReply`：收到非 ACK 回包；`isReadFallback=true` 时仅表示诊断读值
+- `deviceAck`：收到 v2 业务回复，结构化字段在 `data.response`
+- `deviceReply`：收到非 v2 回包；`isReadFallback=true` 时仅表示诊断读值
 
 ## Demo 使用方式
 
@@ -310,8 +309,8 @@ window.ZnhaasBle = {
 2. 在 H5 页面点击 `申请权限` 和 `开启蓝牙`
 3. 点击 `开始扫描`
 4. 在 H5 设备列表中点击设备卡片，自动发起连接
-5. 连接成功后点击 5 个控制按钮之一
-6. 在 H5 的 `Runtime Log` 查看发送结果和设备 ACK
+5. 连接成功后点击 4 个控制按钮之一
+6. 在 H5 的 `Runtime Log` 查看发送结果和设备回复
 
 ## JitPack 发布
 

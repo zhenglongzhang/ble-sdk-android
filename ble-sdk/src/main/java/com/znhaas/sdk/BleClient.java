@@ -49,19 +49,25 @@ public class BleClient {
     public static final String FIXED_SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E";
     public static final String FIXED_WRITE_CHARACTERISTIC_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E";
     public static final String FIXED_NOTIFY_CHARACTERISTIC_UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E";
-    public static final int REQUESTED_MTU = 517;
+    public static final int REQUESTED_MTU = 247;
 
     public enum RecordAction {
-        START_RECORD("1"),
-        STOP_RECORD("0"),
-        QUERY_STATUS("2"),
-        DISABLE_VIDEO_KEY("3"),
-        ENABLE_VIDEO_KEY("4");
+        START_RECORD("0", "1"),
+        STOP_RECORD("0", "0"),
+        QUERY_STATUS("1", "3"),
+        DISABLE_VIDEO_KEY("0", "1"),
+        ENABLE_VIDEO_KEY("0", "2");
 
+        private final String commandCode;
         private final String code;
 
-        RecordAction(String code) {
+        RecordAction(String commandCode, String code) {
+            this.commandCode = commandCode;
             this.code = code;
+        }
+
+        public String getCommandCode() {
+            return commandCode;
         }
 
         public String getCode() {
@@ -445,14 +451,26 @@ public class BleClient {
     }
 
     public String buildRecordCommand(RecordAction action, String requestId, long timestamp, Map<String, String> extraFields) {
-        StringBuilder command = new StringBuilder("V1|RECORD|")
-                .append(action.getCode())
-                .append("|")
-                .append(requestId)
-                .append("|")
-                .append(timestamp);
-        appendRecordFields(command, extraFields);
-        return command.toString();
+        List<String> fields = new ArrayList<>(14);
+        fields.add("2");
+        fields.add("C");
+        fields.add(action.getCommandCode());
+        fields.add(action.getCode());
+        fields.add(sanitizeRecordValue(requestId));
+        fields.add(String.valueOf(timestamp));
+        if (action == RecordAction.QUERY_STATUS) {
+            fields.add("");
+            fields.add("");
+            fields.add("");
+        } else {
+            fields.add(getRecordField(extraFields, "work_order", "workOrder", "work-order"));
+            fields.add(getRecordField(extraFields, "task_id", "taskId", "task-id"));
+            fields.add(getRecordField(extraFields, "device_id", "deviceId", "device-id"));
+        }
+        while (fields.size() < 14) {
+            fields.add("");
+        }
+        return joinProtocolFields(fields) + "\n";
     }
 
     public void release() {
@@ -761,38 +779,6 @@ public class BleClient {
         return "req-" + System.currentTimeMillis();
     }
 
-    private void appendRecordFields(StringBuilder command, Map<String, String> extraFields) {
-        if (extraFields == null || extraFields.isEmpty()) {
-            return;
-        }
-        for (Map.Entry<String, String> entry : extraFields.entrySet()) {
-            appendRecordField(command, entry.getKey(), entry.getValue());
-        }
-    }
-
-    private void appendRecordField(StringBuilder command, String key, String value) {
-        String sanitizedKey = sanitizeRecordKey(key);
-        String sanitizedValue = sanitizeRecordValue(value);
-        if (sanitizedKey.isEmpty() || sanitizedValue.isEmpty()) {
-            return;
-        }
-        command.append("|")
-                .append(sanitizedKey)
-                .append("=")
-                .append(sanitizedValue);
-    }
-
-    private String sanitizeRecordKey(String key) {
-        if (key == null) {
-            return "";
-        }
-        return key.trim()
-                .replace("|", "")
-                .replace("=", "")
-                .replace("\n", "")
-                .replace("\r", "");
-    }
-
     private String sanitizeRecordValue(String value) {
         if (value == null) {
             return "";
@@ -801,6 +787,30 @@ public class BleClient {
                 .replace("|", "")
                 .replace("\n", "")
                 .replace("\r", "");
+    }
+
+    private String getRecordField(Map<String, String> fields, String... keys) {
+        if (fields == null || fields.isEmpty()) {
+            return "";
+        }
+        for (String key : keys) {
+            String value = fields.get(key);
+            if (value != null) {
+                return sanitizeRecordValue(value);
+            }
+        }
+        return "";
+    }
+
+    private String joinProtocolFields(List<String> fields) {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < fields.size(); i++) {
+            if (i > 0) {
+                builder.append("|");
+            }
+            builder.append(fields.get(i) == null ? "" : fields.get(i));
+        }
+        return builder.toString();
     }
 
     private interface InternalBleListener {

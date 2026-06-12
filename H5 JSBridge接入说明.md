@@ -9,18 +9,27 @@ window.ZnhaasBleBridge.startScan(12000)
 window.ZnhaasBleBridge.stopScan()
 window.ZnhaasBleBridge.connect(address)
 window.ZnhaasBleBridge.disconnect()
-window.ZnhaasBleBridge.startRecord()
+// window.ZnhaasBleBridge.startRecord()
 window.ZnhaasBleBridge.stopRecord()
 window.ZnhaasBleBridge.queryRecordStatus()
 window.ZnhaasBleBridge.disableVideoKey()
-window.ZnhaasBleBridge.enableVideoKey()
+// window.ZnhaasBleBridge.enableVideoKey()
 
-window.ZnhaasBleBridge.startRecord({
+window.ZnhaasBleBridge.enableVideoKey({
   work_order: 'WO-20250122',
-  task_id: 'TASK-01'
+  task_id: 'TASK-01',
+  device_id: '31011500991325140052'
+})
+
+window.ZnhaasBleBridge.disableVideoKey({
+  work_order: 'WO-20250122',
+  task_id: 'TASK-01',
+  device_id: '31011500991325140052'
 })
 window.ZnhaasBleBridge.writeCommand(command)
 ```
+
+当前蓝牙控制命令使用 v2 固定 14 位协议。`disableVideoKey(extra)` 表示开始录制并禁用视频物理按键，`enableVideoKey(extra)` 表示开始录制并启用视频物理按键；`startRecord(extra)` 保留为兼容方法，默认等同于开始录制并禁用视频物理按键。
 
 ### 1.1 原生事件回调
 
@@ -55,8 +64,8 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
 | `replyListenerEnabled` | 回包监听已开启 |
 | `commandDispatched` | H5 已发起控制命令 |
 | `writeSuccess` | BLE 写入成功 |
-| `deviceAck` | 收到 `V1|ACK|...` 业务 ACK |
-| `deviceReply` | 收到非 ACK 回包，`isReadFallback=true` 时仅表示诊断读值 |
+| `deviceAck` | 收到 v2 设备回复，`data.response` 为结构化结果 |
+| `deviceReply` | 收到非 v2 回复，`isReadFallback=true` 时仅表示诊断读值 |
 | `error` | 扫描、连接、写入等错误 |
 
 ### 1.2 方法同步返回值
@@ -161,7 +170,7 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
 | `action` | `string` | H5 调用动作，例如 `startRecord` |
 | `requestId` | `string|null` | SDK 生成的请求 ID，`writeCommand` 为 `null` |
 | `command` | `string` | 实际下发到 BLE 的完整指令 |
-| `extraFields` | `object` | H5 传入并成功拼接的扩展字段 |
+| `extraFields` | `object` | H5 传入并成功写入协议固定位置的业务字段，仅保留非空键值 |
 
 写入和设备回包字段如下，适用于 `writeSuccess`，`writeError`，`deviceAck`，`deviceReply`，`replyListenerEnabled`，`replyListenerDisabled`，`replyChannelError`：
 
@@ -171,9 +180,32 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
 | `characteristicUuid` | `string` | 特征 UUID |
 | `value` | `string` | UTF-8 文本内容，`replyListenerEnabled`、`replyListenerDisabled`、`replyChannelError` 不返回 |
 | `hexValue` | `string` | 十六进制内容，仅 `writeSuccess`、`deviceAck`、`deviceReply` 返回 |
-| `isAck` | `boolean` | 仅 `deviceAck`、`deviceReply` 返回，是否为 `V1|ACK|...` |
+| `isAck` | `boolean` | 仅 `deviceAck`、`deviceReply` 返回，是否为设备业务回复 |
+| `isV2Response` | `boolean` | 仅 `deviceAck`、`deviceReply` 返回，是否为 v2 协议回复 |
 | `isReadFallback` | `boolean` | 仅 `deviceAck`、`deviceReply` 返回，是否为诊断读值回退 |
+| `response` | `object` | 仅 v2 回复返回，结构化业务字段 |
 | `message` | `string` | 仅 `writeError`、`replyChannelError` 返回，错误描述 |
+
+`response` 字段说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `command` | `string` | `0` 表示录制控制，`1` 表示状态查询 |
+| `commandText` | `string` | `RECORD` 或 `STATUS` |
+| `action` | `string` | `0` 停止，`1` 开始并禁用物理键，`2` 开始并启用物理键，`3` 查询 |
+| `actionText` | `string` | 动作文本 |
+| `requestId` | `string` | 原请求 ID |
+| `workOrder` | `string` | 工单号 |
+| `taskId` | `string` | 任务号 |
+| `deviceId` | `string` | 设备 ID |
+| `battery` | `string` | 电池电量 |
+| `rssi` | `string` | 信号强度 |
+| `filePath` | `string` | 停止录制成功后的文件路径 |
+| `bucketName` | `string` | OSS bucket 名称 |
+| `recordingState` | `string` | 状态查询时的录制状态，`0` 空闲，`1` 录制中 |
+| `statusCode` | `string` | `0` 成功，`1` 失败，`2` 参数错误 |
+| `statusText` | `string` | 状态码文本 |
+| `success` | `boolean` | 是否成功 |
 
 错误和日志字段如下：
 
@@ -379,12 +411,13 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
 {
   "type": "commandDispatched",
   "data": {
-    "action": "startRecord",
+    "action": "disableVideoKey",
     "requestId": "req-1705939230000",
-    "command": "V1|RECORD|1|req-1705939230000|1705939230000|work_order=WO-20250122|task_id=TASK-01",
+    "command": "2|C|0|1|req-1705939230000|1705939230000|WO-20250122|TASK-01|31011500991325140052|||||\n",
     "extraFields": {
       "work_order": "WO-20250122",
-      "task_id": "TASK-01"
+      "task_id": "TASK-01",
+      "device_id": "31011500991325140052"
     }
   },
   "timestamp": 1705939230000
@@ -399,8 +432,8 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
   "data": {
     "serviceUuid": "6E400001-B5A3-F393-E0A9-E50E24DCCA9E",
     "characteristicUuid": "6E400003-B5A3-F393-E0A9-E50E24DCCA9E",
-    "value": "V1|RECORD|1|req-1705939230000|1705939230000|work_order=WO-20250122|task_id=TASK-01",
-    "hexValue": "56317C5245434F52447C317C7265712D313730353933393233303030307C313730353933393233303030307C776F726B5F6F726465723D574F2D32303235303132327C7461736B5F69643D5441534B2D3031"
+    "value": "2|C|0|1|req-1705939230000|1705939230000|WO-20250122|TASK-01|31011500991325140052|||||",
+    "hexValue": "327C437C307C317C7265712D313730353933393233303030307C313730353933393233303030307C574F2D32303235303132327C5441534B2D30317C33313031313530303939313332353134303035327C7C7C7C7C0A"
   },
   "timestamp": 1705939230005
 }
@@ -414,10 +447,31 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
   "data": {
     "serviceUuid": "6E400001-B5A3-F393-E0A9-E50E24DCCA9E",
     "characteristicUuid": "6E400002-B5A3-F393-E0A9-E50E24DCCA9E",
-    "value": "V1|ACK|RECORD|SUCCESS|req-1705939230000|1705939230010|state=RECORDING",
-    "hexValue": "56317C41434B7C5245434F52447C535543434553537C7265712D313730353933393233303030307C313730353933393233303031307C73746174653D5245434F5244494E47",
+    "value": "2|R|0|1|req-1705939230000|1705939230010|WO-20250122|TASK-01|31011500991325140052|85|-45|||0",
+    "hexValue": "327C527C307C317C7265712D313730353933393233303030307C313730353933393233303031307C574F2D32303235303132327C5441534B2D30317C33313031313530303939313332353134303035327C38357C2D34357C7C7C30",
     "isAck": true,
-    "isReadFallback": false
+    "isV2Response": true,
+    "isReadFallback": false,
+    "response": {
+      "version": "2",
+      "cmdType": "R",
+      "command": "0",
+      "commandText": "RECORD",
+      "action": "1",
+      "actionText": "START_RECORD_DISABLE_KEY",
+      "requestId": "req-1705939230000",
+      "timestamp": "1705939230010",
+      "workOrder": "WO-20250122",
+      "taskId": "TASK-01",
+      "deviceId": "31011500991325140052",
+      "battery": "85",
+      "rssi": "-45",
+      "filePath": "",
+      "bucketName": "",
+      "statusCode": "0",
+      "statusText": "SUCCESS",
+      "success": true
+    }
   },
   "timestamp": 1705939230010
 }
@@ -453,16 +507,15 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
 }
 ```
 
-扩展字段只拼接有 key 且有 value 的键值对。比如调用：
+v2 协议只会下发固定业务字段：`work_order`、`task_id`、`device_id`。其中开始/停止录制要求 `work_order` 和 `task_id` 有值，`device_id` 可选；查询状态不下发这 3 个字段。H5 传入其他键不会继续拼接到协议末尾。
 
 ```js
-window.ZnhaasBleBridge.startRecord({
-  work_order: '',
-  task_id: 'TASK-01'
+window.ZnhaasBleBridge.disableVideoKey({
+  work_order: 'WO-20250122',
+  task_id: 'TASK-01',
+  device_id: '31011500991325140052'
 })
 ```
-
-最终只会追加 `|task_id=TASK-01`，不会追加 `|work_order=`。
 
 ## 2. Demo 使用说明
 
@@ -473,7 +526,7 @@ window.ZnhaasBleBridge.startRecord({
 3. 点击 `开始扫描`
 4. 在 H5 设备列表中点击目标安全帽设备
 5. 连接成功后点击对应控制按钮
-6. 在 H5 的 `Runtime Log` 中查看发送结果和设备 ACK
+6. 在 H5 的 `Runtime Log` 中查看发送结果和设备回复
 
 ## 3. 注意事项
 

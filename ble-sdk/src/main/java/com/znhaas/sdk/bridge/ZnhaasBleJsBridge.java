@@ -435,6 +435,121 @@ public class ZnhaasBleJsBridge implements
         return json;
     }
 
+    private JSONObject parseV2Response(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (!normalized.startsWith("2|R|")) {
+            return null;
+        }
+        String[] parts = normalizeV2ResponseParts(normalized.split("\\|", -1));
+        if (parts == null) {
+            return null;
+        }
+        JSONObject json = new JSONObject();
+        String statusCode = parts[13];
+        put(json, "version", parts[0]);
+        put(json, "cmdType", parts[1]);
+        put(json, "command", parts[2]);
+        put(json, "commandText", commandText(parts[2]));
+        put(json, "action", parts[3]);
+        put(json, "actionText", actionText(parts[3]));
+        put(json, "requestId", parts[4]);
+        put(json, "timestamp", parts[5]);
+        put(json, "workOrder", parts[6]);
+        put(json, "taskId", parts[7]);
+        put(json, "deviceId", parts[8]);
+        put(json, "battery", parts[9]);
+        put(json, "rssi", parts[10]);
+        put(json, "filePath", parts[11]);
+        put(json, "bucketName", parts[12]);
+        put(json, "statusCode", statusCode);
+        put(json, "statusText", statusText(statusCode));
+        put(json, "success", "0".equals(statusCode));
+        if ("1".equals(parts[2]) && parts[11] != null && !parts[11].isEmpty()) {
+            put(json, "recordingState", parts[11]);
+            put(json, "recording", "1".equals(parts[11]));
+        }
+        return json;
+    }
+
+    private String[] normalizeV2ResponseParts(String[] rawParts) {
+        if (rawParts == null || rawParts.length < 14) {
+            return null;
+        }
+        if (rawParts.length == 14) {
+            return rawParts;
+        }
+        String[] parts = new String[14];
+        for (int i = 0; i < parts.length; i++) {
+            parts[i] = "";
+        }
+        for (int i = 0; i < 9 && i < rawParts.length; i++) {
+            parts[i] = rawParts[i];
+        }
+        if ("1".equals(valueAt(rawParts, 2)) && "3".equals(valueAt(rawParts, 3))) {
+            int tailStart = rawParts.length - 5;
+            parts[9] = valueAt(rawParts, tailStart);
+            parts[10] = valueAt(rawParts, tailStart + 1);
+            parts[11] = valueAt(rawParts, tailStart + 2);
+            parts[12] = valueAt(rawParts, tailStart + 3);
+            parts[13] = valueAt(rawParts, tailStart + 4);
+            return parts;
+        }
+        for (int i = 9; i < 13 && i < rawParts.length; i++) {
+            parts[i] = rawParts[i];
+        }
+        parts[13] = valueAt(rawParts, rawParts.length - 1);
+        return parts;
+    }
+
+    private String valueAt(String[] values, int index) {
+        if (values == null || index < 0 || index >= values.length || values[index] == null) {
+            return "";
+        }
+        return values[index];
+    }
+
+    private String commandText(String command) {
+        if ("0".equals(command)) {
+            return "RECORD";
+        }
+        if ("1".equals(command)) {
+            return "STATUS";
+        }
+        return "UNKNOWN";
+    }
+
+    private String actionText(String action) {
+        if ("0".equals(action)) {
+            return "STOP_RECORD";
+        }
+        if ("1".equals(action)) {
+            return "START_RECORD_DISABLE_KEY";
+        }
+        if ("2".equals(action)) {
+            return "START_RECORD_ENABLE_KEY";
+        }
+        if ("3".equals(action)) {
+            return "QUERY_STATUS";
+        }
+        return "UNKNOWN";
+    }
+
+    private String statusText(String statusCode) {
+        if ("0".equals(statusCode)) {
+            return "SUCCESS";
+        }
+        if ("1".equals(statusCode)) {
+            return "FAILED";
+        }
+        if ("2".equals(statusCode)) {
+            return "PARAM_ERROR";
+        }
+        return "UNKNOWN";
+    }
+
     @Override
     public void onBluetoothStateChanged(int state, boolean enabled) {
         JSONObject data = baseState();
@@ -569,9 +684,16 @@ public class ZnhaasBleJsBridge implements
         put(data, "characteristicUuid", characteristicUuid.toString());
         put(data, "value", ascii);
         put(data, "hexValue", hexValue);
-        put(data, "isAck", ascii.startsWith("V1|ACK|"));
+        JSONObject response = parseV2Response(ascii);
+        boolean isV2Response = response != null;
+        boolean isAck = isV2Response || ascii.startsWith("V1|ACK|");
+        put(data, "isAck", isAck);
+        put(data, "isV2Response", isV2Response);
         put(data, "isReadFallback", readFallbackValue);
-        emit(ascii.startsWith("V1|ACK|") ? "deviceAck" : "deviceReply", data);
+        if (isV2Response) {
+            put(data, "response", response);
+        }
+        emit(isAck ? "deviceAck" : "deviceReply", data);
         if (readFallbackValue) {
             pendingReadFallback = false;
         }
