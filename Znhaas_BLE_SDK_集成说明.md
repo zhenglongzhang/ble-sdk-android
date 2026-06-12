@@ -384,7 +384,7 @@ public void onRequestPermissionsResult(int requestCode, String[] permissions, in
 @Override
 protected void onActivityResult(int requestCode, int resultCode, Intent data) {
     super.onActivityResult(requestCode, resultCode, data);
-    bridge.onActivityResult(requestCode);
+    bridge.onActivityResult(requestCode, resultCode);
 }
 ```
 
@@ -442,7 +442,8 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
 | 事件 | 说明 |
 | --- | --- |
 | `state` | 蓝牙、权限、扫描、连接状态 |
-| `permissionsResult` | 运行时权限申请结果 |
+| `permissionsResult` | 运行时权限申请结果，包含 `success/granted/message` |
+| `enableBluetoothResult` | 开启蓝牙结果，包含 `success/enabled/message` |
 | `deviceFound` | 扫描到 `znhaas` 设备 |
 | `scanStopped` | 扫描结束 |
 | `deviceReady` | 连接并完成服务发现 |

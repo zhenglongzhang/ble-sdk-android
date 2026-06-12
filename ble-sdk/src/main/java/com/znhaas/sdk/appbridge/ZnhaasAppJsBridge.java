@@ -3,8 +3,13 @@ package com.znhaas.sdk.appbridge;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -22,7 +27,10 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 
 public class ZnhaasAppJsBridge {
     public static final String DEFAULT_JS_INTERFACE_NAME = "ZnhaasAppBridge";
@@ -30,6 +38,7 @@ public class ZnhaasAppJsBridge {
     public static final int DEFAULT_SCAN_CODE_REQUEST_CODE = 42001;
     public static final int DEFAULT_TAKE_PHOTO_REQUEST_CODE = 42002;
     public static final int DEFAULT_CAMERA_PERMISSION_REQUEST_CODE = 42003;
+    private static final Set<String> ALLOWED_WEBVIEW_SCHEMES = new HashSet<>(Arrays.asList("http", "https", "file"));
 
     private final Activity activity;
     private final WebView webView;
@@ -118,6 +127,43 @@ public class ZnhaasAppJsBridge {
             return requestId;
         }
         startTakePhoto(requestId);
+        return requestId;
+    }
+
+    @JavascriptInterface
+    public String getNetworkState() {
+        JSONObject data = buildNetworkState();
+        emit("networkState", data);
+        return data.toString();
+    }
+
+    @JavascriptInterface
+    public String openWebView(String url) {
+        JSONObject options = new JSONObject();
+        put(options, "url", url);
+        return openWebViewJson(options.toString());
+    }
+
+    @JavascriptInterface
+    public String openWebViewJson(String optionsJson) {
+        final String requestId = buildRequestId("webview");
+        JSONObject options = parseJson(optionsJson);
+        final String url = options.optString("url", "").trim();
+        final String title = options.optString("title", "").trim();
+        if (!isAllowedWebViewUrl(url)) {
+            emitOpenWebViewResult(requestId, false, url, "Invalid or unsupported url.");
+            return requestId;
+        }
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                Intent intent = new Intent(activity, ZnhaasWebViewActivity.class);
+                intent.putExtra(ZnhaasWebViewActivity.EXTRA_URL, url);
+                intent.putExtra(ZnhaasWebViewActivity.EXTRA_TITLE, title);
+                activity.startActivity(intent);
+                emitOpenWebViewResult(requestId, true, url, "");
+            }
+        });
         return requestId;
     }
 
@@ -296,6 +342,87 @@ public class ZnhaasAppJsBridge {
         return json;
     }
 
+    private JSONObject buildNetworkState() {
+        JSONObject data = new JSONObject();
+        ConnectivityManager connectivityManager = (ConnectivityManager) activity.getSystemService(Context.CONNECTIVITY_SERVICE);
+        boolean connected = false;
+        boolean validated = false;
+        boolean metered = false;
+        String type = "none";
+
+        if (connectivityManager != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Network activeNetwork = connectivityManager.getActiveNetwork();
+                NetworkCapabilities capabilities = activeNetwork != null ? connectivityManager.getNetworkCapabilities(activeNetwork) : null;
+                if (capabilities != null) {
+                    connected = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+                    validated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+                    metered = !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED);
+                    if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                        type = "wifi";
+                    } else if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                        type = "cellular";
+                    } else if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+                        type = "ethernet";
+                    } else if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH)) {
+                        type = "bluetooth";
+                    } else {
+                        type = "other";
+                    }
+                }
+            } else {
+                NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
+                connected = networkInfo != null && networkInfo.isConnected();
+                validated = connected;
+                metered = connectivityManager.isActiveNetworkMetered();
+                if (networkInfo != null) {
+                    int networkType = networkInfo.getType();
+                    if (networkType == ConnectivityManager.TYPE_WIFI) {
+                        type = "wifi";
+                    } else if (networkType == ConnectivityManager.TYPE_MOBILE) {
+                        type = "cellular";
+                    } else if (networkType == ConnectivityManager.TYPE_ETHERNET) {
+                        type = "ethernet";
+                    } else if (networkType == ConnectivityManager.TYPE_BLUETOOTH) {
+                        type = "bluetooth";
+                    } else {
+                        type = connected ? "other" : "none";
+                    }
+                }
+            }
+        }
+
+        put(data, "connected", connected);
+        put(data, "type", type);
+        put(data, "validated", validated);
+        put(data, "metered", metered);
+        return data;
+    }
+
+    private boolean isAllowedWebViewUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            Uri uri = Uri.parse(url.trim());
+            String scheme = uri.getScheme();
+            return scheme != null && ALLOWED_WEBVIEW_SCHEMES.contains(scheme.toLowerCase(Locale.US));
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private void emitOpenWebViewResult(String requestId, boolean success, String url, String message) {
+        JSONObject payload = new JSONObject();
+        put(payload, "requestId", requestId);
+        put(payload, "success", success);
+        put(payload, "url", url);
+        if (message != null && !message.isEmpty()) {
+            put(payload, "message", message);
+        }
+        emit("openWebViewResult", payload);
+    }
+
     private boolean hasCameraPermission() {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M
                 || ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
@@ -379,6 +506,8 @@ public class ZnhaasAppJsBridge {
                 + "var facade={__isZnhaasAppFacade:true};"
                 + "facade.scanCode=function(options){var json=stringify(options);return json?native.scanCodeJson(json):native.scanCode();};"
                 + "facade.takePhoto=function(options){var json=stringify(options);return json?native.takePhotoJson(json):native.takePhoto();};"
+                + "facade.getNetworkState=function(){var text=native.getNetworkState();try{return JSON.parse(text);}catch(e){return text;}};"
+                + "facade.openWebView=function(options){if(typeof options==='string'){return native.openWebView(options);}var json=stringify(options);return native.openWebViewJson(json);};"
                 + "window.__ZnhaasAppBridgeFacade=facade;"
                 + "try{window." + targetName + "=facade;}catch(e){}"
                 + "})();";

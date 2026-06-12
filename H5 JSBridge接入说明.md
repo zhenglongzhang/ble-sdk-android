@@ -47,7 +47,8 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
 | 事件 | 说明 |
 | --- | --- |
 | `state` | 蓝牙、权限、扫描、连接状态 |
-| `permissionsResult` | 运行时权限申请结果 |
+| `permissionsResult` | 运行时权限申请结果，包含 `success/granted/message` |
+| `enableBluetoothResult` | 开启蓝牙结果，包含 `success/enabled/message` |
 | `deviceFound` | 扫描到 `znhaas` 设备 |
 | `scanStopped` | 扫描结束 |
 | `deviceReady` | 连接并完成服务发现 |
@@ -64,7 +65,7 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
 | --- | --- | --- |
 | `getState()` | `string` | 当前状态 JSON 字符串，同时会派发 `state` 事件 |
 | `getRequiredPermissions()` | `string` | 权限信息 JSON 字符串 |
-| `requestEnableBluetooth()` | `boolean` | 是否成功发起开启蓝牙流程，缺少权限时会先申请权限并返回 `false` |
+| `requestEnableBluetooth()` | `boolean` | 是否成功发起开启蓝牙流程；最终是否开启成功请监听 `enableBluetoothResult` |
 | `startRecord(extra)` | `string` | 本次命令的 `requestId` |
 | `stopRecord(extra)` | `string` | 本次命令的 `requestId` |
 | `queryRecordStatus(extra)` | `string` | 本次命令的 `requestId` |
@@ -100,7 +101,7 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
 
 ### 1.4 通用 data 字段
 
-状态类事件字段如下，适用于 `state`，`permissionsResult`，`bluetoothStateChanged`：
+状态类事件字段如下，适用于 `state`，`permissionsResult`，`enableBluetoothResult`，`bluetoothStateChanged`：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -112,7 +113,13 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
 | `serviceUuid` | `string` | 固定服务 UUID |
 | `writeUuid` | `string` | 固定写入特征 UUID |
 | `replyUuid` | `string` | 固定回包特征 UUID |
+| `success` | `boolean` | 仅 `permissionsResult`、`enableBluetoothResult` 返回，表示本次操作是否成功 |
 | `granted` | `boolean` | 仅 `permissionsResult` 返回，表示权限是否授予 |
+| `permissions` | `array` | 仅 `permissionsResult` 返回，权限明细列表 |
+| `message` | `string` | 仅结果类事件返回，成功或失败说明 |
+| `alreadyEnabled` | `boolean` | 仅 `enableBluetoothResult` 返回，蓝牙是否在调用前已开启 |
+| `pending` | `boolean` | 仅 `enableBluetoothResult` 返回，是否仍在等待用户处理 |
+| `userAction` | `boolean` | 仅 `enableBluetoothResult` 返回，是否拉起了系统开启蓝牙弹窗 |
 | `stateCode` | `number` | 仅 `bluetoothStateChanged` 返回，Android 蓝牙状态码 |
 | `stateText` | `string` | 仅 `bluetoothStateChanged` 返回，例如 `STATE_ON` |
 | `enabled` | `boolean` | 仅 `bluetoothStateChanged` 返回，蓝牙是否开启 |
@@ -210,9 +217,102 @@ window.addEventListener('ZnhaasBleEvent', function (event) {
     "serviceUuid": "6E400001-B5A3-F393-E0A9-E50E24DCCA9E",
     "writeUuid": "6E400003-B5A3-F393-E0A9-E50E24DCCA9E",
     "replyUuid": "6E400002-B5A3-F393-E0A9-E50E24DCCA9E",
-    "granted": true
+    "success": true,
+    "granted": true,
+    "permissions": [
+      {
+        "name": "android.permission.BLUETOOTH_SCAN",
+        "granted": true,
+        "grantResult": 0
+      },
+      {
+        "name": "android.permission.BLUETOOTH_CONNECT",
+        "granted": true,
+        "grantResult": 0
+      }
+    ],
+    "message": "BLE permissions granted."
   },
   "timestamp": 1705939230001
+}
+```
+
+`permissionsResult` 权限失败：
+
+```json
+{
+  "type": "permissionsResult",
+  "data": {
+    "bluetoothSupported": true,
+    "bluetoothEnabled": false,
+    "hasRequiredPermissions": false,
+    "scanning": false,
+    "connected": false,
+    "serviceUuid": "6E400001-B5A3-F393-E0A9-E50E24DCCA9E",
+    "writeUuid": "6E400003-B5A3-F393-E0A9-E50E24DCCA9E",
+    "replyUuid": "6E400002-B5A3-F393-E0A9-E50E24DCCA9E",
+    "success": false,
+    "granted": false,
+    "permissions": [
+      {
+        "name": "android.permission.BLUETOOTH_SCAN",
+        "granted": false,
+        "grantResult": -1
+      }
+    ],
+    "message": "BLE permissions denied."
+  },
+  "timestamp": 1705939230001
+}
+```
+
+`enableBluetoothResult` 开启成功：
+
+```json
+{
+  "type": "enableBluetoothResult",
+  "data": {
+    "bluetoothSupported": true,
+    "bluetoothEnabled": true,
+    "hasRequiredPermissions": true,
+    "scanning": false,
+    "connected": false,
+    "serviceUuid": "6E400001-B5A3-F393-E0A9-E50E24DCCA9E",
+    "writeUuid": "6E400003-B5A3-F393-E0A9-E50E24DCCA9E",
+    "replyUuid": "6E400002-B5A3-F393-E0A9-E50E24DCCA9E",
+    "success": true,
+    "enabled": true,
+    "userAction": true,
+    "alreadyEnabled": false,
+    "pending": false,
+    "message": "Bluetooth enabled."
+  },
+  "timestamp": 1705939230002
+}
+```
+
+`enableBluetoothResult` 开启失败或用户取消：
+
+```json
+{
+  "type": "enableBluetoothResult",
+  "data": {
+    "bluetoothSupported": true,
+    "bluetoothEnabled": false,
+    "hasRequiredPermissions": true,
+    "scanning": false,
+    "connected": false,
+    "serviceUuid": "6E400001-B5A3-F393-E0A9-E50E24DCCA9E",
+    "writeUuid": "6E400003-B5A3-F393-E0A9-E50E24DCCA9E",
+    "replyUuid": "6E400002-B5A3-F393-E0A9-E50E24DCCA9E",
+    "success": false,
+    "enabled": false,
+    "userAction": true,
+    "alreadyEnabled": false,
+    "pending": false,
+    "message": "Bluetooth enable cancelled or Bluetooth remains disabled."
+  },
+  "timestamp": 1705939230002
 }
 ```
 

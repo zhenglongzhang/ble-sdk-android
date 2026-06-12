@@ -93,7 +93,7 @@
   <section class="hero">
     <div class="eyebrow">Znhaas AppBridge</div>
     <h1>工单 H5 能力测试入口</h1>
-    <p class="subtitle">这个页面用于集中测试 WebView 内的原生能力。当前已接入扫码和拍照，BLE 控制页保留原有测试入口。</p>
+    <p class="subtitle">这个页面用于集中测试 WebView 内的原生能力。当前已接入扫码、拍照、网络状态和打开新 WebView，BLE 控制页保留原有测试入口。</p>
   </section>
 
   <section class="grid">
@@ -107,6 +107,18 @@
       <span class="pill">Take Photo</span>
       <strong>拍照能力测试</strong>
       <span>调用 window.ZnhaasAppBridge.takePhoto()，原生拉起相机，返回压缩后的 JPEG base64 和 dataUrl。</span>
+    </a>
+
+    <a class="card" href="znhaas_network_test.html">
+      <span class="pill">Network</span>
+      <strong>有网无网判断测试</strong>
+      <span>调用 window.ZnhaasAppBridge.getNetworkState()，返回 connected、type、validated、metered。</span>
+    </a>
+
+    <a class="card" href="znhaas_open_webview_test.html">
+      <span class="pill">WebView</span>
+      <strong>打开新 WebView 测试</strong>
+      <span>调用 window.ZnhaasAppBridge.openWebView({ url, title })，由原生打开新的 WebView 页面。</span>
     </a>
 
     <a class="card" href="znhaas_ble_demo.html">

@@ -3,6 +3,8 @@
 ```js
 window.ZnhaasAppBridge.scanCode()
 window.ZnhaasAppBridge.takePhoto()
+window.ZnhaasAppBridge.getNetworkState()
+window.ZnhaasAppBridge.openWebView({ url, title })
 
 window.ZnhaasAppBridge.scanCode({
   source: 'work-order'
@@ -12,9 +14,14 @@ window.ZnhaasAppBridge.takePhoto({
   maxWidth: 1600,
   quality: 80
 })
+
+window.ZnhaasAppBridge.openWebView({
+  url: 'https://www.longfor.com',
+  title: '工单详情'
+})
 ```
 
-当前版本先支持 Android 侧扫码和拍照。图片上传由 H5 自行完成，App 只负责拉起系统能力并返回结果。
+当前版本先支持 Android 侧扫码、拍照、有网无网判断、打开新 WebView。图片上传由 H5 自行完成，App 只负责拉起系统能力并返回结果。
 
 ## 2. 原生事件回调
 
@@ -186,7 +193,122 @@ const requestId = window.ZnhaasAppBridge.takePhoto({
 }
 ```
 
-## 5. Demo 页面
+## 5. 有网无网判断
+
+### 5.1 调用
+
+```js
+const state = window.ZnhaasAppBridge.getNetworkState()
+```
+
+该方法会同步返回网络状态对象，同时派发 `networkState` 事件。
+
+### 5.2 返回字段
+
+事件名：`networkState`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `connected` | `boolean` | 是否有可用网络 |
+| `type` | `string` | 网络类型，可能为 `wifi`、`cellular`、`ethernet`、`bluetooth`、`other`、`none` |
+| `validated` | `boolean` | Android 判断该网络是否可访问公网 |
+| `metered` | `boolean` | 是否为计费网络 |
+
+### 5.3 Mock 数据
+
+```json
+{
+  "type": "networkState",
+  "data": {
+    "connected": true,
+    "type": "wifi",
+    "validated": true,
+    "metered": false
+  },
+  "timestamp": 1705939231000
+}
+```
+
+无网：
+
+```json
+{
+  "type": "networkState",
+  "data": {
+    "connected": false,
+    "type": "none",
+    "validated": false,
+    "metered": false
+  },
+  "timestamp": 1705939231000
+}
+```
+
+## 6. 打开新的 WebView
+
+### 6.1 调用
+
+```js
+const requestId = window.ZnhaasAppBridge.openWebView({
+  url: 'https://www.longfor.com',
+  title: '工单详情'
+})
+```
+
+也可以直接传 URL：
+
+```js
+const requestId = window.ZnhaasAppBridge.openWebView('https://www.longfor.com')
+```
+
+参数说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `url` | `string` | 要打开的页面地址，当前支持 `http`、`https`、`file` |
+| `title` | `string` | 新 WebView 顶部标题，可选 |
+
+### 6.2 返回事件
+
+事件名：`openWebViewResult`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `requestId` | `string` | 本次打开请求 ID |
+| `success` | `boolean` | 是否成功发起打开 |
+| `url` | `string` | 本次请求打开的 URL |
+| `message` | `string` | 可选，失败原因 |
+
+### 6.3 Mock 数据
+
+```json
+{
+  "type": "openWebViewResult",
+  "data": {
+    "requestId": "webview-1705939230000",
+    "success": true,
+    "url": "https://www.longfor.com"
+  },
+  "timestamp": 1705939231000
+}
+```
+
+URL 不合法：
+
+```json
+{
+  "type": "openWebViewResult",
+  "data": {
+    "requestId": "webview-1705939230000",
+    "success": false,
+    "url": "",
+    "message": "Invalid or unsupported url."
+  },
+  "timestamp": 1705939231000
+}
+```
+
+## 7. Demo 页面
 
 当前 Android Demo 默认加载：
 
@@ -201,4 +323,7 @@ file:///android_asset/znhaas_app_tests.html
 | `znhaas_app_tests.html` | 所有测试功能入口 |
 | `znhaas_scan_code_test.html` | 扫码能力测试 |
 | `znhaas_take_photo_test.html` | 拍照能力测试 |
+| `znhaas_network_test.html` | 有网无网判断测试 |
+| `znhaas_open_webview_test.html` | 打开新 WebView 测试 |
+| `znhaas_webview_target.html` | 新 WebView 本地目标测试页 |
 | `znhaas_ble_demo.html` | 原 BLE 控制测试 |

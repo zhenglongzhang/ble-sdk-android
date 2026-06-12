@@ -68,7 +68,7 @@ public class MainActivity extends AppCompatActivity {
             handled = appJsBridge.onActivityResult(requestCode, resultCode, data);
         }
         if (!handled && bleJsBridge != null) {
-            bleJsBridge.onActivityResult(requestCode);
+            bleJsBridge.onActivityResult(requestCode, resultCode);
         }
     }
 

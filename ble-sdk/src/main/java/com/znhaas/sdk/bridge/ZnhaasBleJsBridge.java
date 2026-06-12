@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -57,6 +58,7 @@ public class ZnhaasBleJsBridge implements
     private boolean fixedReplySupportsRead;
     private boolean pendingReadFallback;
     private boolean enableBluetoothAfterPermission;
+    private boolean enableBluetoothRequestPending;
 
     public ZnhaasBleJsBridge(Activity activity, WebView webView) {
         this.activity = activity;
@@ -106,27 +108,60 @@ public class ZnhaasBleJsBridge implements
             granted = false;
         } else {
             for (int grantResult : grantResults) {
-                if (grantResult != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                if (grantResult != PackageManager.PERMISSION_GRANTED) {
                     granted = false;
                     break;
                 }
             }
         }
-        JSONObject data = baseState();
-        put(data, "granted", granted);
+        emitPermissionsResult(
+                granted,
+                permissions,
+                grantResults,
+                granted ? "BLE permissions granted." : "BLE permissions denied."
+        );
         emitState();
-        emit("permissionsResult", data);
         if (granted && enableBluetoothAfterPermission) {
             enableBluetoothAfterPermission = false;
             requestEnableBluetooth();
         } else if (!granted) {
+            if (enableBluetoothAfterPermission) {
+                emitEnableBluetoothResult(
+                        false,
+                        false,
+                        false,
+                        false,
+                        "BLE permissions denied. Bluetooth enable request was not started."
+                );
+            }
             enableBluetoothAfterPermission = false;
         }
     }
 
     public void onActivityResult(int requestCode) {
+        onActivityResult(requestCode, Activity.RESULT_CANCELED);
+    }
+
+    public void onActivityResult(int requestCode, final int resultCode) {
         if (requestCode == DEFAULT_ENABLE_BLUETOOTH_REQUEST_CODE) {
-            emitState();
+            enableBluetoothRequestPending = false;
+            mainHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    boolean enabled = bleClient.isBluetoothEnabled();
+                    boolean success = enabled || resultCode == Activity.RESULT_OK;
+                    emitState();
+                    emitEnableBluetoothResult(
+                            success,
+                            true,
+                            false,
+                            false,
+                            success
+                                    ? "Bluetooth enabled."
+                                    : "Bluetooth enable cancelled or Bluetooth remains disabled."
+                    );
+                }
+            }, 300L);
         }
     }
 
@@ -152,15 +187,27 @@ public class ZnhaasBleJsBridge implements
     @JavascriptInterface
     public void requestPermissions() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || bleClient.hasRequiredPermissions()) {
-            JSONObject data = baseState();
-            put(data, "granted", true);
-            emit("permissionsResult", data);
+            emitPermissionsResult(
+                    true,
+                    BlePermissionHelper.getRuntimePermissions(),
+                    null,
+                    "BLE permissions already granted."
+            );
             return;
         }
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
-                activity.requestPermissions(BlePermissionHelper.getRuntimePermissions(), DEFAULT_PERMISSION_REQUEST_CODE);
+                try {
+                    activity.requestPermissions(BlePermissionHelper.getRuntimePermissions(), DEFAULT_PERMISSION_REQUEST_CODE);
+                } catch (RuntimeException exception) {
+                    emitPermissionsResult(
+                            false,
+                            BlePermissionHelper.getRuntimePermissions(),
+                            null,
+                            "Unable to request BLE permissions: " + exception.getMessage()
+                    );
+                }
             }
         });
     }
@@ -168,21 +215,35 @@ public class ZnhaasBleJsBridge implements
     @JavascriptInterface
     public boolean requestEnableBluetooth() {
         if (!bleClient.isBluetoothSupported()) {
+            emitEnableBluetoothResult(false, false, false, false, "BLE is not supported on this device.");
             emitError("bluetooth", "BLE is not supported on this device.");
             return false;
+        }
+        if (bleClient.isBluetoothEnabled()) {
+            emitState();
+            emitEnableBluetoothResult(true, false, true, false, "Bluetooth is already enabled.");
+            return true;
         }
         if (!bleClient.hasRequiredPermissions()) {
             enableBluetoothAfterPermission = true;
             requestPermissions();
-            emitError("permission", "Missing BLE runtime permissions. Requesting permissions before enabling Bluetooth.");
+            emitLog("Missing BLE runtime permissions. Requesting permissions before enabling Bluetooth.");
             return false;
         }
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
                 boolean handled = bleClient.requestEnableBluetooth(activity, DEFAULT_ENABLE_BLUETOOTH_REQUEST_CODE);
-                if (!handled && !bleClient.isBluetoothEnabled()) {
+                if (bleClient.isBluetoothEnabled()) {
+                    enableBluetoothRequestPending = false;
+                    emitState();
+                    emitEnableBluetoothResult(true, false, true, false, "Bluetooth is already enabled.");
+                } else if (!handled) {
+                    enableBluetoothRequestPending = false;
+                    emitEnableBluetoothResult(false, false, false, false, "Unable to request Bluetooth enable. Please check BLE permissions.");
                     emitError("bluetooth", "Unable to request Bluetooth enable. Please check BLE permissions.");
+                } else {
+                    enableBluetoothRequestPending = true;
                 }
             }
         });
@@ -570,6 +631,53 @@ public class ZnhaasBleJsBridge implements
 
     private void emitState() {
         emit("state", baseState());
+    }
+
+    private void emitPermissionsResult(boolean granted, String[] permissions, int[] grantResults, String message) {
+        JSONObject data = baseState();
+        put(data, "success", granted);
+        put(data, "granted", granted);
+        put(data, "permissions", permissionsToJson(permissions, grantResults));
+        put(data, "message", message);
+        emit("permissionsResult", data);
+    }
+
+    private void emitEnableBluetoothResult(
+            boolean success,
+            boolean userAction,
+            boolean alreadyEnabled,
+            boolean pending,
+            String message
+    ) {
+        JSONObject data = baseState();
+        put(data, "success", success);
+        put(data, "enabled", bleClient.isBluetoothEnabled());
+        put(data, "userAction", userAction);
+        put(data, "alreadyEnabled", alreadyEnabled);
+        put(data, "pending", pending);
+        put(data, "hasRequiredPermissions", bleClient.hasRequiredPermissions());
+        put(data, "message", message);
+        emit("enableBluetoothResult", data);
+    }
+
+    private JSONArray permissionsToJson(String[] permissions, int[] grantResults) {
+        JSONArray array = new JSONArray();
+        if (permissions == null) {
+            return array;
+        }
+        for (int i = 0; i < permissions.length; i++) {
+            JSONObject item = new JSONObject();
+            boolean granted = grantResults == null
+                    ? bleClient.hasRequiredPermissions()
+                    : i < grantResults.length && grantResults[i] == PackageManager.PERMISSION_GRANTED;
+            put(item, "name", permissions[i]);
+            put(item, "granted", granted);
+            if (grantResults != null && i < grantResults.length) {
+                put(item, "grantResult", grantResults[i]);
+            }
+            array.put(item);
+        }
+        return array;
     }
 
     private JSONObject baseState() {

@@ -463,13 +463,16 @@
     function requestPermissions() {
       if (!ensureBridge()) return;
       bridge().requestPermissions();
+      log('已发起 BLE 权限申请，等待 permissionsResult 回调...');
     }
 
     function enableBluetooth() {
       if (!ensureBridge()) return;
       const handled = bridge().requestEnableBluetooth();
       if (!handled) {
-        log('开启蓝牙前需要先完成 BLE 权限授权，已自动发起权限申请。');
+        log('开启蓝牙请求未直接拉起，可能需要先完成 BLE 权限授权，请等待回调。');
+      } else {
+        log('已发起开启蓝牙请求，等待 enableBluetoothResult 回调...');
       }
     }
 
@@ -537,8 +540,15 @@
     function handleNativeEvent(event) {
       const type = event.type;
       const data = event.data || {};
-      if (type === 'state' || type === 'bluetoothStateChanged' || type === 'permissionsResult') {
+      if (type === 'state' || type === 'bluetoothStateChanged' || type === 'permissionsResult' || type === 'enableBluetoothResult') {
+        // log(type + ' ' + JSON.stringify(data));
         updateState(data);
+      }
+      if (type === 'permissionsResult') {
+        log('权限申请结果: ' + (data.success ? '成功' : '失败') + '，granted=' + !!data.granted + (data.message ? '，' + data.message : ''));
+      }
+      if (type === 'enableBluetoothResult') {
+        log('开启蓝牙结果: ' + (data.success ? '成功' : '失败') + '，enabled=' + !!data.enabled + (data.message ? '，' + data.message : ''));
       }
       if (type === 'scanStarted') {
         setText('scanStatus', '扫描中');
