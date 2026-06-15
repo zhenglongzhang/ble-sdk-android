@@ -4,7 +4,7 @@
 
 本文档仅供龙湖内部使用，为龙湖 APP 开发提供 Android 安全帽 BLE SDK 接口说明，禁止外传。
 
-本文档对应的 SDK 为 `Znhaas BLE SDK`，当前版本号为 `1.0.2`，最低支持 Android `API 22`。
+本文档对应的 SDK 为 `Znhaas BLE SDK`，当前版本号为 `1.0.3`，最低支持 Android `API 22`。
 
 ## 2. 业务说明
 
@@ -50,7 +50,7 @@ dependencyResolutionManagement {
 
 ```gradle
 dependencies {
-    implementation "com.github.zhenglongzhang:ble-sdk-android:1.0.2"
+    implementation "com.github.zhenglongzhang:ble-sdk-android:1.0.3"
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
 }
 ```
@@ -483,6 +483,6 @@ app/src/main/assets/znhaas_ble_demo.html
 ## 14. 版本信息
 
 - SDK 名称：`Znhaas BLE SDK`
-- 当前版本：`1.0.2`
-- Maven 坐标：`com.github.zhenglongzhang:ble-sdk-android:1.0.2`
+- 当前版本：`1.0.3`
+- Maven 坐标：`com.github.zhenglongzhang:ble-sdk-android:1.0.3`
 - 最低系统版本：`Android API 22`
