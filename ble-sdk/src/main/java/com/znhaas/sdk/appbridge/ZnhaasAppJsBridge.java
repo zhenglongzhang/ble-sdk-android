@@ -14,13 +14,11 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.provider.MediaStore;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -47,7 +45,6 @@ public class ZnhaasAppJsBridge {
     private PendingAction pendingCameraAction;
     private String pendingScanCodeRequestId;
     private String pendingTakePhotoRequestId;
-    private Uri pendingPhotoUri;
     private File pendingPhotoFile;
     private int pendingPhotoMaxWidth = 1600;
     private int pendingPhotoQuality = 80;
@@ -85,7 +82,6 @@ public class ZnhaasAppJsBridge {
         pendingCameraAction = null;
         pendingScanCodeRequestId = null;
         pendingTakePhotoRequestId = null;
-        pendingPhotoUri = null;
         cleanupPendingPhoto();
     }
 
@@ -173,7 +169,7 @@ public class ZnhaasAppJsBridge {
             return true;
         }
         if (requestCode == DEFAULT_TAKE_PHOTO_REQUEST_CODE) {
-            handleTakePhotoResult(resultCode);
+            handleTakePhotoResult(resultCode, data);
             return true;
         }
         return false;
@@ -221,19 +217,9 @@ public class ZnhaasAppJsBridge {
                         return;
                     }
                     pendingPhotoFile = File.createTempFile("znhaas_photo_", ".jpg", dir);
-                    pendingPhotoUri = FileProvider.getUriForFile(
-                            activity,
-                            activity.getPackageName() + ".znhaas.fileprovider",
-                            pendingPhotoFile
-                    );
-                    Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-                    intent.putExtra(MediaStore.EXTRA_OUTPUT, pendingPhotoUri);
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                    if (intent.resolveActivity(activity.getPackageManager()) == null) {
-                        emitPhotoError(requestId, "No camera app is available.");
-                        cleanupPendingPhoto();
-                        return;
-                    }
+                    Intent intent = new Intent(activity, ZnhaasTakePhotoActivity.class);
+                    intent.putExtra(ZnhaasTakePhotoActivity.EXTRA_REQUEST_ID, requestId);
+                    intent.putExtra(ZnhaasTakePhotoActivity.EXTRA_OUTPUT_PATH, pendingPhotoFile.getAbsolutePath());
                     activity.startActivityForResult(intent, DEFAULT_TAKE_PHOTO_REQUEST_CODE);
                 } catch (Exception exception) {
                     emitPhotoError(requestId, exception.getMessage());
@@ -260,12 +246,19 @@ public class ZnhaasAppJsBridge {
         emit("scanCodeResult", payload);
     }
 
-    private void handleTakePhotoResult(int resultCode) {
+    private void handleTakePhotoResult(int resultCode, Intent data) {
         final String requestId = pendingTakePhotoRequestId;
-        final Uri photoUri = pendingPhotoUri;
+        final File photoFile = pendingPhotoFile;
         pendingTakePhotoRequestId = null;
-        pendingPhotoUri = null;
-        if (resultCode != Activity.RESULT_OK || photoUri == null) {
+        if (resultCode == Activity.RESULT_FIRST_USER) {
+            String message = data != null
+                    ? data.getStringExtra(ZnhaasTakePhotoActivity.EXTRA_ERROR_MESSAGE)
+                    : null;
+            emitPhotoError(requestId, message != null ? message : "Camera capture failed.");
+            cleanupPendingPhoto();
+            return;
+        }
+        if (resultCode != Activity.RESULT_OK || photoFile == null || !photoFile.exists()) {
             JSONObject payload = new JSONObject();
             put(payload, "requestId", requestId);
             put(payload, "cancelled", true);
@@ -279,7 +272,7 @@ public class ZnhaasAppJsBridge {
                 try {
                     ZnhaasImageResult image = ZnhaasImageEncoder.encode(
                             activity,
-                            photoUri,
+                            Uri.fromFile(photoFile),
                             "photo",
                             pendingPhotoMaxWidth,
                             pendingPhotoQuality
