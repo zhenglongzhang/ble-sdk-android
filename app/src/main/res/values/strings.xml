@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ZNZL</string>
+    <string name="app_name">龙湖电梯维保</string>
+    <string name="demo_web_url" translatable="false">file:///android_asset/znhaas_app_tests.html</string>
     <string name="demo_title">Znhaas BLE Control Demo</string>
     <string name="demo_subtitle">Only scans BLE names starting with znhaas, connects when you tap a matched device, and exposes the 5 control actions from the ASCII control spec.</string>
     <string name="check_bluetooth">Check Bluetooth</string>

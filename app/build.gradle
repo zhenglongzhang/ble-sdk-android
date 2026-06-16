@@ -21,6 +21,20 @@ android {
         }
     }
 
+    flavorDimensions "environment"
+
+    productFlavors {
+        local {
+            dimension "environment"
+        }
+        dev {
+            dimension "environment"
+        }
+        prod {
+            dimension "environment"
+        }
+    }
+
     compileOptions {
         coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_17
@@ -29,6 +43,16 @@ android {
 
     buildFeatures {
         viewBinding true
+    }
+
+    applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach { output ->
+            if (variant.buildType.name == "release") {
+                def flavorName = variant.productFlavors[0].name
+                def prefix = flavorName == "local" ? "app-release" : "app-${flavorName}"
+                outputFileName = "${prefix}-${variant.versionName}.apk"
+            }
+        }
     }
 }
 

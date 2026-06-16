@@ -53,10 +53,7 @@ public class MainActivity extends AppCompatActivity {
         bleJsBridge.attach();
         appJsBridge = new ZnhaasAppJsBridge(this, webView);
         appJsBridge.attach();
-        // BLE Demo：file:///android_asset/znhaas_ble_demo.html
-        // 生产环境地址：https://sso.longfor.com/cas/h5/login/?service=https://aiss.wan-prod.longfor.com/#/homeLIst
-        // 测试环境地址 https://sso-uat.longfor.com/cas/h5/login/?service=https://aiss.h5-uat.longfor.com/m/#/homeList
-        webView.loadUrl("file:///android_asset/znhaas_app_tests.html");
+        webView.loadUrl(getString(R.string.demo_web_url));
     }
 
     @SuppressWarnings("deprecation")

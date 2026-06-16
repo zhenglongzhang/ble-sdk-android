@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="demo_web_url" translatable="false">https://sso.longfor.com/cas/h5/login/?service=https://aiss.wan-prod.longfor.com/#/homeLIst</string>
+</resources>
